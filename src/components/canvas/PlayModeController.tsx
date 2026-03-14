@@ -4,12 +4,16 @@ import gsap from 'gsap'
 import { useEditorStore } from '../../store'
 import type { SlideTransition } from '../../types/editor'
 
+type SequenceStep = {
+  elements: HTMLElement[]
+  trigger: 'auto' | 'click'
+}
+
 export function PlayModeController() {
   const {
     isPlayMode,
     slides,
     currentSlideId,
-    presentationName,
     navigationDirection,
     nextSlide,
     previousSlide,
@@ -17,13 +21,18 @@ export function PlayModeController() {
   } = useEditorStore()
 
   const stepIndexRef = useRef(0)
-  const sequenceRef = useRef<HTMLElement[][]>([])
+  const sequenceRef = useRef<SequenceStep[]>([])
+  const autoAdvanceRef = useRef<number | null>(null)
   const currentSlideIndex = slides.findIndex((slide) => slide.id === currentSlideId)
   const currentSlide = slides[currentSlideIndex] ?? null
 
   useEffect(() => {
     if (!isPlayMode) {
+      clearAutoAdvance(autoAdvanceRef)
       document.body.classList.remove('play-mode')
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {})
+      }
       const transitionLayer = document.getElementById('transitionLayer')
       if (transitionLayer) {
         gsap.set(transitionLayer, { clearProps: 'all' })
@@ -32,6 +41,9 @@ export function PlayModeController() {
     }
 
     document.body.classList.add('play-mode')
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {})
+    }
 
     const slideContent = document.getElementById('slideContent')
     const transitionLayer = document.getElementById('transitionLayer')
@@ -58,6 +70,7 @@ export function PlayModeController() {
 
     sequenceRef.current = buildSequenceSteps(blocks)
     stepIndexRef.current = 0
+    clearAutoAdvance(autoAdvanceRef)
     playSlideTransition(
       slideContent,
       transitionLayer,
@@ -65,6 +78,9 @@ export function PlayModeController() {
       currentSlide.transitionDuration,
       navigationDirection,
     )
+    if (sequenceRef.current[0]?.trigger === 'auto') {
+      advanceSequence(sequenceRef.current, stepIndexRef, nextSlide, autoAdvanceRef)
+    }
 
     const handleAdvance = (event: KeyboardEvent | MouseEvent) => {
       if (event instanceof KeyboardEvent) {
@@ -75,7 +91,12 @@ export function PlayModeController() {
         event.preventDefault()
       }
 
-      advanceSequence(sequenceRef.current, stepIndexRef, nextSlide)
+      if (event instanceof MouseEvent && event.button !== 0) {
+        return
+      }
+
+      clearAutoAdvance(autoAdvanceRef)
+      advanceSequence(sequenceRef.current, stepIndexRef, nextSlide, autoAdvanceRef)
     }
 
     const handleBack = (event: KeyboardEvent) => {
@@ -84,6 +105,7 @@ export function PlayModeController() {
       }
 
       event.preventDefault()
+      clearAutoAdvance(autoAdvanceRef)
       previousSlide()
     }
 
@@ -93,19 +115,29 @@ export function PlayModeController() {
       }
 
       event.preventDefault()
+      clearAutoAdvance(autoAdvanceRef)
       togglePlayMode(false)
+    }
+
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && useEditorStore.getState().isPlayMode) {
+        togglePlayMode(false)
+      }
     }
 
     window.addEventListener('keydown', handleAdvance)
     window.addEventListener('mousedown', handleAdvance)
     window.addEventListener('keydown', handleBack)
     window.addEventListener('keydown', handleEscape)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
 
     return () => {
+      clearAutoAdvance(autoAdvanceRef)
       window.removeEventListener('keydown', handleAdvance)
       window.removeEventListener('mousedown', handleAdvance)
       window.removeEventListener('keydown', handleBack)
       window.removeEventListener('keydown', handleEscape)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
   }, [
     currentSlide,
@@ -118,22 +150,7 @@ export function PlayModeController() {
     togglePlayMode,
   ])
 
-  if (!isPlayMode || !currentSlide) {
-    return null
-  }
-
-  return (
-    <div className="play-hud">
-      <div className="play-hud__top">
-        <span>{presentationName}</span>
-        <span>
-          {currentSlideIndex + 1} / {slides.length}
-        </span>
-      </div>
-
-      <div className="play-hud__hint">空格或单击前进，方向键切页，Esc 退出</div>
-    </div>
-  )
+  return null
 }
 
 function buildSequenceSteps(elements: HTMLElement[]) {
@@ -141,35 +158,52 @@ function buildSequenceSteps(elements: HTMLElement[]) {
     .filter((element) => element.dataset.hidden !== 'true' && (element.dataset.anim ?? 'none') !== 'none')
     .sort((left, right) => Number(left.dataset.zIndex ?? 0) - Number(right.dataset.zIndex ?? 0))
 
-  const steps: HTMLElement[][] = []
+  const steps: SequenceStep[] = []
 
   animated.forEach((element) => {
     const trigger = element.dataset.trigger
 
     if (trigger === 'withPrev' && steps.length > 0) {
-      steps[steps.length - 1].push(element)
+      steps[steps.length - 1].elements.push(element)
       return
     }
 
-    steps.push([element])
+    steps.push({
+      elements: [element],
+      trigger: trigger === 'onClick' ? 'click' : 'auto',
+    })
   })
 
   return steps
 }
 
 function advanceSequence(
-  sequence: HTMLElement[][],
+  sequence: SequenceStep[],
   stepIndexRef: MutableRefObject<number>,
   nextSlide: () => void,
+  autoAdvanceRef: MutableRefObject<number | null>,
 ) {
   if (stepIndexRef.current >= sequence.length) {
     nextSlide()
     return
   }
 
-  const group = sequence[stepIndexRef.current]
-  group.forEach((element) => animateBlock(element))
+  const step = sequence[stepIndexRef.current]
+  step.elements.forEach((element) => animateBlock(element))
   stepIndexRef.current += 1
+
+  if (stepIndexRef.current >= sequence.length) {
+    return
+  }
+
+  if (sequence[stepIndexRef.current].trigger !== 'auto') {
+    return
+  }
+
+  autoAdvanceRef.current = window.setTimeout(() => {
+    autoAdvanceRef.current = null
+    advanceSequence(sequence, stepIndexRef, nextSlide, autoAdvanceRef)
+  }, getStepDuration(step))
 }
 
 function animateBlock(element: HTMLElement) {
@@ -226,6 +260,25 @@ function animateBlock(element: HTMLElement) {
   }
 
   gsap.to(element, { autoAlpha: opacity, duration, delay, ease: 'power2.out' })
+}
+
+function getStepDuration(step: SequenceStep) {
+  return Math.max(
+    ...step.elements.map((element) => {
+      const duration = Number(element.dataset.duration ?? 0.8)
+      const delay = Number(element.dataset.delay ?? 0)
+      return (duration + delay) * 1000
+    }),
+  )
+}
+
+function clearAutoAdvance(autoAdvanceRef: MutableRefObject<number | null>) {
+  if (autoAdvanceRef.current === null) {
+    return
+  }
+
+  window.clearTimeout(autoAdvanceRef.current)
+  autoAdvanceRef.current = null
 }
 
 function playSlideTransition(

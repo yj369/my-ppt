@@ -46,7 +46,7 @@ export type AnimationType =
   | 'pop'
 
 export type TriggerType = 'onClick' | 'withPrev' | 'afterPrev'
-export type TextAlign = 'left' | 'center' | 'right'
+export type TextAlign = 'left' | 'center' | 'right' | 'justify'
 export type InspectorTab = 'document' | 'format' | 'animate'
 
 export type BlockAppearance = {
@@ -58,6 +58,11 @@ export type BlockAppearance = {
   textColor: string
   fontSize: number
   textAlign: TextAlign
+  fontFamily?: string
+  fontWeight?: string
+  fontStyle?: string
+  textDecoration?: string
+  verticalAlign?: 'top' | 'middle' | 'bottom'
 }
 
 export type EditorBlock = {

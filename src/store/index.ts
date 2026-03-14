@@ -117,7 +117,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   slides: initialSnapshot.slides,
   currentSlideId: initialSnapshot.currentSlideId,
   activeBlockId: null,
-  activeInspector: 'document',
+  activeInspector: 'format',
   isPlayMode: false,
   navigationDirection: 0,
   showGrid: initialSnapshot.showGrid,

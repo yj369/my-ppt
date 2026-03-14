@@ -38,7 +38,7 @@ export function CanvasViewport() {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   const [camStart, setCamStart] = useState({ x: 0, y: 0 })
 
-  const fitCanvasCenter = () => {
+  const fitCanvasCenter = (playMode = false) => {
     const viewport = viewportRef.current
     if (!viewport) {
       return
@@ -46,33 +46,37 @@ export function CanvasViewport() {
 
     const viewportWidth = viewport.clientWidth
     const viewportHeight = viewport.clientHeight
-    const zoom = Math.min((viewportWidth - 120) / SLIDE_WIDTH, (viewportHeight - 120) / SLIDE_HEIGHT)
+    if (viewportWidth <= 0 || viewportHeight <= 0) {
+      return
+    }
+
+    const chromePadding = playMode ? 0 : 120
+    const zoom = Math.max(
+      0.15,
+      Math.min(
+        (viewportWidth - chromePadding) / SLIDE_WIDTH,
+        (viewportHeight - chromePadding) / SLIDE_HEIGHT,
+      ),
+    )
     const x = (viewportWidth - SLIDE_WIDTH * zoom) / 2
     const y = (viewportHeight - SLIDE_HEIGHT * zoom) / 2
     setCam(x, y, zoom)
   }
 
   useEffect(() => {
-    fitCanvasCenter()
+    const frame = window.requestAnimationFrame(() => {
+      fitCanvasCenter(isPlayMode)
+    })
 
     const handleResize = () => {
-      if (isPlayMode) {
-        const viewportWidth = window.innerWidth
-        const viewportHeight = window.innerHeight
-        const zoom = Math.min(viewportWidth / SLIDE_WIDTH, viewportHeight / SLIDE_HEIGHT)
-        setCam(
-          (viewportWidth - SLIDE_WIDTH * zoom) / 2,
-          (viewportHeight - SLIDE_HEIGHT * zoom) / 2,
-          zoom,
-        )
-        return
-      }
-
-      fitCanvasCenter()
+      fitCanvasCenter(isPlayMode)
     }
 
     window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', handleResize)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlayMode])
 
@@ -282,7 +286,7 @@ export function CanvasViewport() {
           <button onClick={() => adjustZoom(-0.1)}>缩小</button>
           <span>{Math.round(camZoom * 100)}%</span>
           <button onClick={() => adjustZoom(0.1)}>放大</button>
-          <button onClick={fitCanvasCenter}>适应屏幕</button>
+          <button onClick={() => fitCanvasCenter(false)}>适应屏幕</button>
           {activeBlockId && <span className="zoom-toolbar__hint">Delete 删除 · Shift + 方向键 快移</span>}
         </div>
       )}

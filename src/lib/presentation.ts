@@ -89,6 +89,11 @@ const baseAppearance = (textColor = '#f7f7fb'): BlockAppearance => ({
   textColor,
   fontSize: 28,
   textAlign: 'left',
+  fontFamily: 'Helvetica Neue',
+  fontWeight: 'normal',
+  fontStyle: 'normal',
+  textDecoration: 'none',
+  verticalAlign: 'top',
 })
 
 type BlockOverrides = Partial<Omit<EditorBlock, 'appearance'>> & {

@@ -11,6 +11,7 @@ import {
   Trash2,
   Underline,
 } from 'lucide-react'
+import { useState } from 'react'
 import {
   ANIMATION_OPTIONS,
   BACKGROUND_OPTIONS,
@@ -47,15 +48,11 @@ export function SidebarRight() {
   const currentSlide = slides.find((slide) => slide.id === currentSlideId)
   const activeBlock = currentSlide?.blocks.find((block) => block.id === activeBlockId)
 
+  const [formatTab, setFormatTab] = useState<'style' | 'text' | 'arrange'>('text')
+
   return (
     <aside className="sidebar sidebar-right sidebar-right--inspector">
       <div className="sidebar-tabs sidebar-tabs--inspector">
-        <button
-          className={activeInspector === 'document' ? 'is-active' : ''}
-          onClick={() => setActiveInspector('document')}
-        >
-          幻灯片
-        </button>
         <button
           className={activeInspector === 'format' ? 'is-active' : ''}
           onClick={() => setActiveInspector('format')}
@@ -67,6 +64,12 @@ export function SidebarRight() {
           onClick={() => setActiveInspector('animate')}
         >
           动画
+        </button>
+        <button
+          className={activeInspector === 'document' ? 'is-active' : ''}
+          onClick={() => setActiveInspector('document')}
+        >
+          文稿
         </button>
       </div>
 
@@ -135,18 +138,21 @@ export function SidebarRight() {
               </label>
               <label className="field">
                 <span>时长</span>
-                <input
-                  type="range"
-                  min="0.3"
-                  max="1.8"
-                  step="0.1"
-                  value={currentSlide.transitionDuration}
-                  onChange={(event) =>
-                    updateSlide(currentSlide.id, {
-                      transitionDuration: Number(event.target.value),
-                    })
-                  }
-                />
+                <div className="range-with-value">
+                  <input
+                    type="range"
+                    min="0.3"
+                    max="1.8"
+                    step="0.1"
+                    value={currentSlide.transitionDuration}
+                    onChange={(event) =>
+                      updateSlide(currentSlide.id, {
+                        transitionDuration: Number(event.target.value),
+                      })
+                    }
+                  />
+                  <span className="range-value">{currentSlide.transitionDuration.toFixed(1)}s</span>
+                </div>
               </label>
             </section>
           </>
@@ -163,73 +169,55 @@ export function SidebarRight() {
               </section>
             ) : (
               <>
-                <section className="inspector-card">
-                  <h3>文本</h3>
-                  <div className="command-row">
-                    <button className="command-btn" onMouseDown={() => runRichTextCommand('bold')}>
-                      <Bold size={14} />
-                    </button>
-                    <button className="command-btn" onMouseDown={() => runRichTextCommand('italic')}>
-                      <Italic size={14} />
-                    </button>
-                    <button
-                      className="command-btn"
-                      onMouseDown={() => runRichTextCommand('underline')}
-                    >
-                      <Underline size={14} />
-                    </button>
-                    <button
-                      className="command-btn"
-                      onMouseDown={() => runRichTextCommand('justifyLeft')}
-                      onClick={() =>
-                        updateBlock(currentSlide.id, activeBlock.id, {
-                          appearance: { textAlign: 'left' },
-                        })
-                      }
-                    >
-                      <AlignLeft size={14} />
-                    </button>
-                    <button
-                      className="command-btn"
-                      onMouseDown={() => runRichTextCommand('justifyCenter')}
-                      onClick={() =>
-                        updateBlock(currentSlide.id, activeBlock.id, {
-                          appearance: { textAlign: 'center' },
-                        })
-                      }
-                    >
-                      <AlignCenter size={14} />
-                    </button>
-                    <button
-                      className="command-btn"
-                      onMouseDown={() => runRichTextCommand('justifyRight')}
-                      onClick={() =>
-                        updateBlock(currentSlide.id, activeBlock.id, {
-                          appearance: { textAlign: 'right' },
-                        })
-                      }
-                    >
-                      <AlignRight size={14} />
-                    </button>
-                  </div>
+                <div className="sidebar-tabs sidebar-tabs--sub">
+                  <button
+                    className={formatTab === 'style' ? 'is-active' : ''}
+                    onClick={() => setFormatTab('style')}
+                  >
+                    样式
+                  </button>
+                  <button
+                    className={formatTab === 'text' ? 'is-active' : ''}
+                    onClick={() => setFormatTab('text')}
+                  >
+                    文本
+                  </button>
+                  <button
+                    className={formatTab === 'arrange' ? 'is-active' : ''}
+                    onClick={() => setFormatTab('arrange')}
+                  >
+                    排列
+                  </button>
+                </div>
 
-                  <div className="field-grid">
-                    <label className="field">
-                      <span>字体颜色</span>
-                      <input
-                        type="color"
-                        value={normalizeColor(activeBlock.appearance.textColor)}
-                        onChange={(event) =>
-                          updateBlock(currentSlide.id, activeBlock.id, {
-                            appearance: { textColor: event.target.value },
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="field">
-                      <span>字号</span>
+                {formatTab === 'text' && (
+                  <section className="inspector-card inspector-card--kn">
+                  <h3>字体</h3>
+                  <div className="kn-font-family">
+                    <select
+                      value={activeBlock.appearance.fontFamily || 'Helvetica Neue'}
+                      onChange={(event) => updateBlock(currentSlide.id, activeBlock.id, { appearance: { fontFamily: event.target.value }})}
+                    >
+                      <option value="Helvetica Neue">Helvetica Neue</option>
+                      <option value="PingFang SC">PingFang SC</option>
+                      <option value="Arial">Arial</option>
+                      <option value="Times New Roman">Times New Roman</option>
+                    </select>
+                  </div>
+                  
+                  <div className="kn-font-style-row">
+                    <select
+                      value={activeBlock.appearance.fontWeight || 'normal'}
+                      onChange={(event) => updateBlock(currentSlide.id, activeBlock.id, { appearance: { fontWeight: event.target.value }})}
+                    >
+                      <option value="normal">常规</option>
+                      <option value="bold">粗体</option>
+                    </select>
+                    <div className="kn-number-input">
                       <input
                         type="number"
+                        min="1"
+                        max="999"
                         value={activeBlock.appearance.fontSize}
                         onChange={(event) =>
                           updateBlock(currentSlide.id, activeBlock.id, {
@@ -237,11 +225,114 @@ export function SidebarRight() {
                           })
                         }
                       />
-                    </label>
+                      <span>pt</span>
+                      <div className="kn-stepper">
+                        <button onClick={() => updateBlock(currentSlide.id, activeBlock.id, { appearance: { fontSize: activeBlock.appearance.fontSize + 1 }})}>▴</button>
+                        <button onClick={() => updateBlock(currentSlide.id, activeBlock.id, { appearance: { fontSize: Math.max(1, activeBlock.appearance.fontSize - 1) }})}>▾</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="kn-style-tools">
+                    <button className="kn-style-btn"><div className="kn-dot"></div></button>
+                    <button
+                      className={`kn-style-btn ${activeBlock.appearance.fontWeight === 'bold' ? 'is-active' : ''}`}
+                      onMouseDown={() => runRichTextCommand('bold')}
+                      onClick={() => updateBlock(currentSlide.id, activeBlock.id, { appearance: { fontWeight: activeBlock.appearance.fontWeight === 'bold' ? 'normal' : 'bold' }})}
+                    >
+                      <Bold size={14} />
+                    </button>
+                    <button
+                      className={`kn-style-btn ${activeBlock.appearance.fontStyle === 'italic' ? 'is-active' : ''}`}
+                      onMouseDown={() => runRichTextCommand('italic')}
+                      onClick={() => updateBlock(currentSlide.id, activeBlock.id, { appearance: { fontStyle: activeBlock.appearance.fontStyle === 'italic' ? 'normal' : 'italic' }})}
+                    >
+                      <Italic size={14} />
+                    </button>
+                    <button
+                      className={`kn-style-btn ${activeBlock.appearance.textDecoration === 'underline' ? 'is-active' : ''}`}
+                      onMouseDown={() => runRichTextCommand('underline')}
+                      onClick={() => updateBlock(currentSlide.id, activeBlock.id, { appearance: { textDecoration: activeBlock.appearance.textDecoration === 'underline' ? 'none' : 'underline' }})}
+                    >
+                      <Underline size={14} />
+                    </button>
+                    <button className="kn-style-btn kn-style-btn--settings">⚙</button>
+                  </div>
+                  
+                  <div className="kn-property-row mt-4">
+                    <span className="kn-label">文本颜色</span>
+                    <div className="kn-color-picker-wrap">
+                      <input
+                        type="color"
+                        className="kn-color-input"
+                        value={normalizeColor(activeBlock.appearance.textColor)}
+                        onChange={(event) =>
+                          updateBlock(currentSlide.id, activeBlock.id, {
+                            appearance: { textColor: event.target.value },
+                          })
+                        }
+                      />
+                      <div className="kn-color-wheel-icon"></div>
+                    </div>
+                  </div>
+
+                  <div className="kn-align-grid mt-4">
+                    <div className="kn-align-row">
+                      <button
+                        className={`kn-align-btn ${activeBlock.appearance.textAlign === 'left' ? 'is-active' : ''}`}
+                        onMouseDown={() => runRichTextCommand('justifyLeft')}
+                        onClick={() => updateBlock(currentSlide.id, activeBlock.id, { appearance: { textAlign: 'left' } })}
+                      >
+                        <AlignLeft size={16} />
+                      </button>
+                      <button
+                        className={`kn-align-btn ${activeBlock.appearance.textAlign === 'center' ? 'is-active' : ''}`}
+                        onMouseDown={() => runRichTextCommand('justifyCenter')}
+                        onClick={() => updateBlock(currentSlide.id, activeBlock.id, { appearance: { textAlign: 'center' } })}
+                      >
+                        <AlignCenter size={16} />
+                      </button>
+                      <button
+                        className={`kn-align-btn ${activeBlock.appearance.textAlign === 'right' ? 'is-active' : ''}`}
+                        onMouseDown={() => runRichTextCommand('justifyRight')}
+                        onClick={() => updateBlock(currentSlide.id, activeBlock.id, { appearance: { textAlign: 'right' } })}
+                      >
+                        <AlignRight size={16} />
+                      </button>
+                      <button
+                        className={`kn-align-btn ${activeBlock.appearance.textAlign === 'justify' ? 'is-active' : ''}`}
+                        onMouseDown={() => runRichTextCommand('justifyFull')}
+                        onClick={() => updateBlock(currentSlide.id, activeBlock.id, { appearance: { textAlign: 'justify' } })}
+                      >
+                        ≡
+                      </button>
+                    </div>
+                    <div className="kn-align-row">
+                      <button
+                        className={`kn-align-btn ${activeBlock.appearance.verticalAlign === 'top' ? 'is-active' : ''}`}
+                        onClick={() => updateBlock(currentSlide.id, activeBlock.id, { appearance: { verticalAlign: 'top' }})}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        className={`kn-align-btn ${activeBlock.appearance.verticalAlign === 'middle' ? 'is-active' : ''}`}
+                        onClick={() => updateBlock(currentSlide.id, activeBlock.id, { appearance: { verticalAlign: 'middle' }})}
+                      >
+                        ↕
+                      </button>
+                      <button
+                        className={`kn-align-btn ${activeBlock.appearance.verticalAlign === 'bottom' ? 'is-active' : ''}`}
+                        onClick={() => updateBlock(currentSlide.id, activeBlock.id, { appearance: { verticalAlign: 'bottom' }})}
+                      >
+                        ↓
+                      </button>
+                    </div>
                   </div>
                 </section>
+                )}
 
-                <section className="inspector-card">
+                {formatTab === 'style' && (
+                  <section className="inspector-card">
                   <h3>样式</h3>
                   <div className="field-grid">
                     <label className="field">
@@ -272,38 +363,46 @@ export function SidebarRight() {
 
                   <label className="field">
                     <span>透明度</span>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="1"
-                      step="0.05"
-                      value={activeBlock.opacity}
-                      onChange={(event) =>
-                        updateBlock(currentSlide.id, activeBlock.id, {
-                          opacity: Number(event.target.value),
-                        })
-                      }
-                    />
+                    <div className="range-with-value">
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="1"
+                        step="0.05"
+                        value={activeBlock.opacity}
+                        onChange={(event) =>
+                          updateBlock(currentSlide.id, activeBlock.id, {
+                            opacity: Number(event.target.value),
+                          })
+                        }
+                      />
+                      <span className="range-value">{Math.round(activeBlock.opacity * 100)}%</span>
+                    </div>
                   </label>
 
                   <label className="field">
                     <span>圆角</span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="60"
-                      step="1"
-                      value={activeBlock.appearance.radius}
-                      onChange={(event) =>
-                        updateBlock(currentSlide.id, activeBlock.id, {
-                          appearance: { radius: Number(event.target.value) },
-                        })
-                      }
-                    />
+                    <div className="range-with-value">
+                      <input
+                        type="range"
+                        min="0"
+                        max="60"
+                        step="1"
+                        value={activeBlock.appearance.radius}
+                        onChange={(event) =>
+                          updateBlock(currentSlide.id, activeBlock.id, {
+                            appearance: { radius: Number(event.target.value) },
+                          })
+                        }
+                      />
+                      <span className="range-value">{activeBlock.appearance.radius}</span>
+                    </div>
                   </label>
                 </section>
+                )}
 
-                <section className="inspector-card">
+                {formatTab === 'arrange' && (
+                  <section className="inspector-card">
                   <h3>排列</h3>
                   <div className="field-grid">
                     <label className="field">
@@ -358,18 +457,21 @@ export function SidebarRight() {
 
                   <label className="field">
                     <span>旋转</span>
-                    <input
-                      type="range"
-                      min="-45"
-                      max="45"
-                      step="1"
-                      value={activeBlock.rotation}
-                      onChange={(event) =>
-                        updateBlock(currentSlide.id, activeBlock.id, {
-                          rotation: Number(event.target.value),
-                        })
-                      }
-                    />
+                    <div className="range-with-value">
+                      <input
+                        type="range"
+                        min="-45"
+                        max="45"
+                        step="1"
+                        value={activeBlock.rotation}
+                        onChange={(event) =>
+                          updateBlock(currentSlide.id, activeBlock.id, {
+                            rotation: Number(event.target.value),
+                          })
+                        }
+                      />
+                      <span className="range-value">{activeBlock.rotation}°</span>
+                    </div>
                   </label>
 
                   <div className="toggle-list">
@@ -414,6 +516,7 @@ export function SidebarRight() {
                     </button>
                   </div>
                 </section>
+                )}
               </>
             )}
           </>
@@ -442,18 +545,21 @@ export function SidebarRight() {
               </label>
               <label className="field">
                 <span>时长</span>
-                <input
-                  type="range"
-                  min="0.3"
-                  max="1.8"
-                  step="0.1"
-                  value={currentSlide.transitionDuration}
-                  onChange={(event) =>
-                    updateSlide(currentSlide.id, {
-                      transitionDuration: Number(event.target.value),
-                    })
-                  }
-                />
+                <div className="range-with-value">
+                  <input
+                    type="range"
+                    min="0.3"
+                    max="1.8"
+                    step="0.1"
+                    value={currentSlide.transitionDuration}
+                    onChange={(event) =>
+                      updateSlide(currentSlide.id, {
+                        transitionDuration: Number(event.target.value),
+                      })
+                    }
+                  />
+                  <span className="range-value">{currentSlide.transitionDuration.toFixed(1)}s</span>
+                </div>
               </label>
             </section>
 
@@ -494,18 +600,21 @@ export function SidebarRight() {
                 </label>
                 <label className="field">
                   <span>持续时间</span>
-                  <input
-                    type="range"
-                    min="0.2"
-                    max="2"
-                    step="0.1"
-                    value={activeBlock.duration}
-                    onChange={(event) =>
-                      updateBlock(currentSlide.id, activeBlock.id, {
-                        duration: Number(event.target.value),
-                      })
-                    }
-                  />
+                  <div className="range-with-value">
+                    <input
+                      type="range"
+                      min="0.2"
+                      max="2"
+                      step="0.1"
+                      value={activeBlock.duration}
+                      onChange={(event) =>
+                        updateBlock(currentSlide.id, activeBlock.id, {
+                          duration: Number(event.target.value),
+                        })
+                      }
+                    />
+                    <span className="range-value">{activeBlock.duration.toFixed(1)}s</span>
+                  </div>
                 </label>
               </section>
             )}

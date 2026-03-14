@@ -45,9 +45,56 @@ export type AnimationType =
   | 'blur-in'
   | 'pop'
 
+export type ActionAnimationType =
+  | 'none'
+  | 'pulse'
+  | 'bounce'
+  | 'shake'
+  | 'flip'
+  | 'flash'
+
+export type BuildOutAnimationType =
+  | 'none'
+  | 'fade-out'
+  | 'scale-out'
+  | 'wipe-left'
+  | 'blur-out'
+
+export type AnimationPhase = 'buildIn' | 'action' | 'buildOut'
 export type TriggerType = 'onClick' | 'withPrev' | 'afterPrev'
 export type TextAlign = 'left' | 'center' | 'right' | 'justify'
 export type InspectorTab = 'document' | 'format' | 'animate'
+
+export type BuildInAnimation = {
+  effect: AnimationType
+  trigger: TriggerType
+  duration: number
+  delay: number
+  order: number
+}
+
+export type ActionAnimation = {
+  effect: ActionAnimationType
+  trigger: TriggerType
+  duration: number
+  delay: number
+  order: number
+  loop: boolean
+}
+
+export type BuildOutAnimation = {
+  effect: BuildOutAnimationType
+  trigger: TriggerType
+  duration: number
+  delay: number
+  order: number
+}
+
+export type BlockAnimations = {
+  buildIn: BuildInAnimation
+  action: ActionAnimation
+  buildOut: BuildOutAnimation
+}
 
 export type BlockAppearance = {
   fill: string
@@ -84,6 +131,7 @@ export type EditorBlock = {
   trigger: TriggerType
   duration: number
   delay: number
+  animations?: BlockAnimations
 }
 
 export type Slide = {

@@ -3,23 +3,37 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
+  ChevronDown,
+  ChevronUp,
   Eye,
   EyeOff,
   Italic,
   Lock,
   LockOpen,
+  Pause,
+  Play,
   Trash2,
   Underline,
+  X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { previewBlockPhase, restoreBlockAfterPreview } from '../../lib/animation-runtime'
 import {
-  ANIMATION_OPTIONS,
+  ANIMATION_PHASE_OPTIONS,
+  getBlockAnimations,
+  getEffectLabel,
+  getEffectOptions,
+  getPhaseLabel,
+  getSlideBuildOrder,
+  getTriggerLabel,
+} from '../../lib/animations'
+import {
   BACKGROUND_OPTIONS,
   LAYOUT_OPTIONS,
   TRANSITION_OPTIONS,
 } from '../../lib/presentation'
 import { useEditorStore } from '../../store'
-import type { AnimationType, TriggerType } from '../../types/editor'
+import type { AnimationPhase, TriggerType } from '../../types/editor'
 
 function isEditableTarget() {
   const target = document.activeElement as HTMLElement | null
@@ -42,38 +56,150 @@ export function SidebarRight() {
     applySlideLayout,
     updateSlide,
     updateBlock,
+    updateBlockAnimation,
+    moveBlockAnimation,
     deleteBlock,
+    setActiveBlock,
   } = useEditorStore()
 
   const currentSlide = slides.find((slide) => slide.id === currentSlideId)
   const activeBlock = currentSlide?.blocks.find((block) => block.id === activeBlockId)
+  const buildOrder = currentSlide ? getSlideBuildOrder(currentSlide) : []
 
   const [formatTab, setFormatTab] = useState<'style' | 'text' | 'arrange'>('text')
+  const [animationTab, setAnimationTab] = useState<AnimationPhase>('buildIn')
+  const [isBuildOrderModalOpen, setBuildOrderModalOpen] = useState(false)
+  const [previewLoopKey, setPreviewLoopKey] = useState<string | null>(null)
+  const activeAnimations = activeBlock ? getBlockAnimations(activeBlock) : null
+  const activeAnimation = activeAnimations?.[animationTab] ?? null
+  const activeActionAnimation = animationTab === 'action' ? activeAnimations?.action ?? null : null
+  const previewRef = useRef<{
+    key: string
+    element: HTMLElement
+    block: typeof activeBlock
+  } | null>(null)
+  const currentPreviewKey = activeBlock ? `${activeBlock.id}:${animationTab}` : null
+  const isCurrentLoopPreviewing = currentPreviewKey !== null && previewLoopKey === currentPreviewKey
+
+  useEffect(() => {
+    if (!isBuildOrderModalOpen) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Escape') {
+        setBuildOrderModalOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isBuildOrderModalOpen])
+
+  const stopActivePreview = () => {
+    if (!previewRef.current?.block) {
+      previewRef.current = null
+      setPreviewLoopKey(null)
+      return
+    }
+
+    restoreBlockAfterPreview(previewRef.current.element, previewRef.current.block)
+    previewRef.current = null
+    setPreviewLoopKey(null)
+  }
+
+  useEffect(() => {
+    return () => {
+      stopActivePreview()
+    }
+  }, [activeBlockId, animationTab, currentSlideId])
+
+  const handleInspectorChange = (tab: 'format' | 'animate' | 'document') => {
+    if (tab !== 'animate') {
+      stopActivePreview()
+      setBuildOrderModalOpen(false)
+    }
+
+    setActiveInspector(tab)
+  }
+
+  const handlePreviewCurrentAnimation = () => {
+    if (!activeBlock) {
+      return
+    }
+
+    const slideContent = document.getElementById('slideContent')
+    const element = Array.from(slideContent?.querySelectorAll<HTMLElement>('.editor-block') ?? []).find(
+      (candidate) => candidate.dataset.blockId === activeBlock.id,
+    )
+    if (!element) {
+      return
+    }
+
+    if (isCurrentLoopPreviewing) {
+      stopActivePreview()
+      return
+    }
+
+    stopActivePreview()
+    const didStartPreview = previewBlockPhase(element, activeBlock, animationTab)
+    if (!didStartPreview) {
+      return
+    }
+
+    if (animationTab === 'action' && activeActionAnimation?.loop && currentPreviewKey) {
+      previewRef.current = {
+        key: currentPreviewKey,
+        element,
+        block: activeBlock,
+      }
+      setPreviewLoopKey(currentPreviewKey)
+    }
+  }
+
+  const updateCurrentAnimation = (
+    updates: Partial<{
+      effect: string
+      trigger: TriggerType
+      duration: number
+      delay: number
+      order: number
+      loop: boolean
+    }>,
+  ) => {
+    if (!currentSlide || !activeBlock) {
+      return
+    }
+
+    stopActivePreview()
+    updateBlockAnimation(currentSlide.id, activeBlock.id, animationTab, updates)
+  }
 
   return (
-    <aside className="sidebar sidebar-right sidebar-right--inspector">
-      <div className="sidebar-tabs sidebar-tabs--inspector">
-        <button
-          className={activeInspector === 'format' ? 'is-active' : ''}
-          onClick={() => setActiveInspector('format')}
-        >
-          格式
-        </button>
-        <button
-          className={activeInspector === 'animate' ? 'is-active' : ''}
-          onClick={() => setActiveInspector('animate')}
-        >
-          动画
-        </button>
-        <button
-          className={activeInspector === 'document' ? 'is-active' : ''}
-          onClick={() => setActiveInspector('document')}
-        >
-          文稿
-        </button>
-      </div>
+    <>
+      <aside className="sidebar sidebar-right sidebar-right--inspector">
+        <div className="sidebar-tabs sidebar-tabs--inspector">
+          <button
+            className={activeInspector === 'format' ? 'is-active' : ''}
+            onClick={() => handleInspectorChange('format')}
+          >
+            格式
+          </button>
+          <button
+            className={activeInspector === 'animate' ? 'is-active' : ''}
+            onClick={() => handleInspectorChange('animate')}
+          >
+            动画
+          </button>
+          <button
+            className={activeInspector === 'document' ? 'is-active' : ''}
+            onClick={() => handleInspectorChange('document')}
+          >
+            文稿
+          </button>
+        </div>
 
-      <div className="sidebar-scroll">
+        <div className="sidebar-scroll">
         {activeInspector === 'document' && currentSlide && (
           <>
             <section className="inspector-card">
@@ -151,7 +277,7 @@ export function SidebarRight() {
                       })
                     }
                   />
-                  <span className="range-value">{currentSlide.transitionDuration.toFixed(1)}s</span>
+	                  <span className="range-value">{formatDuration(currentSlide.transitionDuration)}</span>
                 </div>
               </label>
             </section>
@@ -558,70 +684,236 @@ export function SidebarRight() {
                       })
                     }
                   />
-                  <span className="range-value">{currentSlide.transitionDuration.toFixed(1)}s</span>
+	                  <span className="range-value">{formatDuration(currentSlide.transitionDuration)}</span>
                 </div>
               </label>
             </section>
 
-            {activeBlock && (
-              <section className="inspector-card">
-                <h3>对象动画</h3>
-                <label className="field">
-                  <span>效果</span>
-                  <select
-                    value={activeBlock.anim}
-                    onChange={(event) =>
-                      updateBlock(currentSlide.id, activeBlock.id, {
-                        anim: event.target.value as AnimationType,
-                      })
-                    }
-                  >
-                    {ANIMATION_OPTIONS.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>触发</span>
-                  <select
-                    value={activeBlock.trigger}
-                    onChange={(event) =>
-                      updateBlock(currentSlide.id, activeBlock.id, {
-                        trigger: event.target.value as TriggerType,
-                      })
-                    }
-                  >
-                    <option value="onClick">单击时</option>
-                    <option value="withPrev">与上一项同时</option>
-                    <option value="afterPrev">在上一项之后</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>持续时间</span>
-                  <div className="range-with-value">
-                    <input
-                      type="range"
-                      min="0.2"
-                      max="2"
-                      step="0.1"
-                      value={activeBlock.duration}
-                      onChange={(event) =>
-                        updateBlock(currentSlide.id, activeBlock.id, {
-                          duration: Number(event.target.value),
-                        })
-                      }
-                    />
-                    <span className="range-value">{activeBlock.duration.toFixed(1)}s</span>
+            <section className="inspector-card inspector-card--animation">
+              <h3>对象动画</h3>
+
+              {!activeBlock || !activeAnimation ? (
+                <p className="empty-copy">先选中一个对象，再为它设置入场、动作或退场动画。</p>
+              ) : (
+                <>
+                  <div className="animation-target-card">
+                    <span className="animation-target-card__label">当前对象</span>
+                    <strong>{activeBlock.name}</strong>
+                    <p>
+                      {getPhaseLabel(animationTab)}
+                      {activeAnimation.effect === 'none'
+                        ? ' · 尚未设置效果'
+                        : ` · ${getEffectLabel(animationTab, activeAnimation.effect)}`}
+                    </p>
                   </div>
-                </label>
-              </section>
-            )}
+
+                  <div className="animation-phase-tabs">
+                    {ANIMATION_PHASE_OPTIONS.map((phase) => (
+                      <button
+                        key={phase.id}
+                        className={animationTab === phase.id ? 'is-active' : ''}
+                        onClick={() => setAnimationTab(phase.id)}
+                      >
+                        {phase.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {activeAnimation.effect === 'none' ? (
+                    <div className="animation-empty-state">
+                      <strong>
+                        {ANIMATION_PHASE_OPTIONS.find((phase) => phase.id === animationTab)?.emptyLabel}
+                      </strong>
+                      <button
+                        className="animation-add-btn"
+                        onClick={() =>
+                          updateCurrentAnimation({
+                            effect: getDefaultEffectForPhase(animationTab),
+                          })
+                        }
+                      >
+                        添加效果
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="animation-summary-row">
+                        <span className="animation-summary-chip">{getPhaseLabel(animationTab)}</span>
+                        <span className="animation-summary-chip">
+                          {getEffectLabel(animationTab, activeAnimation.effect)}
+                        </span>
+                        <span className="animation-summary-chip">
+                          {getTriggerLabel(activeAnimation.trigger)}
+                        </span>
+                        {activeActionAnimation?.loop && (
+                          <span className="animation-summary-chip">循环播放</span>
+                        )}
+                      </div>
+
+                      <label className="field animation-field">
+                        <span>效果类型</span>
+                        <select
+                          value={activeAnimation.effect}
+                          onChange={(event) =>
+                            updateCurrentAnimation({
+                              effect: event.target.value,
+                            })
+                          }
+                        >
+                          {getEffectOptions(animationTab).map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="field animation-field">
+                        <span>触发方式</span>
+                        <select
+                          value={activeAnimation.trigger}
+                          onChange={(event) =>
+                            updateCurrentAnimation({
+                              trigger: event.target.value as TriggerType,
+                            })
+                          }
+                        >
+                          <option value="onClick">单击时</option>
+                          <option value="withPrev">与上一项同时</option>
+                          <option value="afterPrev">在上一项之后</option>
+                        </select>
+                      </label>
+
+                      {activeActionAnimation && (
+                        <div className="animation-toggle-row">
+                          <div className="animation-toggle-copy">
+                            <strong>循环播放</strong>
+                            <p>持续重复，直到下一次动画、切页或退出播放。</p>
+                          </div>
+                          <button
+                            className={`animation-switch ${activeActionAnimation.loop ? 'is-on' : ''}`}
+                            aria-pressed={activeActionAnimation.loop}
+                            onClick={() =>
+                              updateCurrentAnimation({
+                                loop: !activeActionAnimation.loop,
+                              })
+                            }
+                          >
+                            <span className="animation-switch__track" aria-hidden="true">
+                              <span className="animation-switch__thumb" />
+                            </span>
+                            <span className="animation-switch__text">
+                              {activeActionAnimation.loop ? '开启' : '关闭'}
+                            </span>
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="animation-slider-group">
+                        <label className="animation-slider-card">
+                          <div className="animation-slider-card__top">
+                            <span>持续时间</span>
+                            <strong>{formatDuration(activeAnimation.duration)}</strong>
+                          </div>
+                          <input
+                            type="range"
+                            min="0.2"
+                            max="2"
+                            step="0.1"
+                            value={activeAnimation.duration}
+                            onChange={(event) =>
+                              updateCurrentAnimation({
+                                duration: Number(event.target.value),
+                              })
+                            }
+                          />
+                        </label>
+
+                        <label className="animation-slider-card">
+                          <div className="animation-slider-card__top">
+                            <span>延迟</span>
+                            <strong>{formatDuration(activeAnimation.delay)}</strong>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="1.5"
+                            step="0.1"
+                            value={activeAnimation.delay}
+                            onChange={(event) =>
+                              updateCurrentAnimation({
+                                delay: Number(event.target.value),
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+
+                      <div className="animation-card-footer">
+                        <span className="build-order-hint">
+                          {activeAnimation.order ? `当前位于第 ${activeAnimation.order} 步` : '当前还未加入构建顺序'}
+                        </span>
+                        <div className="animation-card-actions">
+                          <button
+                            className={`animation-preview-btn ${isCurrentLoopPreviewing ? 'is-active' : ''}`}
+                            onClick={handlePreviewCurrentAnimation}
+                          >
+                            {isCurrentLoopPreviewing ? <Pause size={14} /> : <Play size={14} />}
+                            <span>{isCurrentLoopPreviewing ? '停止预览' : '预览效果'}</span>
+                          </button>
+                          <button
+                            className="toggle-chip toggle-chip--danger"
+                            onClick={() =>
+                              updateCurrentAnimation({
+                                effect: 'none',
+                              })
+                            }
+                          >
+                            移除效果
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </section>
+
+            <section className="inspector-card inspector-card--animation-footer">
+              <div className="animation-footer-copy">
+                <h3>构建顺序</h3>
+                <p>在独立面板中查看整页动画流程，并调整每一步的先后关系。</p>
+              </div>
+              <button
+                className="build-order-launch"
+                onClick={() => setBuildOrderModalOpen(true)}
+              >
+                打开构建顺序
+              </button>
+            </section>
           </>
         )}
-      </div>
-    </aside>
+        </div>
+      </aside>
+
+      {isBuildOrderModalOpen && currentSlide && (
+        <BuildOrderModal
+          activeBlockId={activeBlockId}
+          animationTab={animationTab}
+          buildOrder={buildOrder}
+          onClose={() => setBuildOrderModalOpen(false)}
+          onMove={(blockId, phase, direction) =>
+            moveBlockAnimation(currentSlide.id, blockId, phase, direction)
+          }
+          onSelect={(blockId, phase) => {
+            setActiveBlock(blockId)
+            setActiveInspector('animate')
+            setAnimationTab(phase)
+          }}
+          slideName={currentSlide.name}
+        />
+      )}
+    </>
   )
 }
 
@@ -631,4 +923,110 @@ function normalizeColor(value: string) {
   }
 
   return '#ffffff'
+}
+
+function getDefaultEffectForPhase(phase: AnimationPhase) {
+  return getEffectOptions(phase).find((option) => option.id !== 'none')?.id ?? 'none'
+}
+
+function formatDuration(value: number) {
+  return `${value.toFixed(1)} 秒`
+}
+
+type BuildOrderModalProps = {
+  activeBlockId: string | null
+  animationTab: AnimationPhase
+  buildOrder: ReturnType<typeof getSlideBuildOrder>
+  onClose: () => void
+  onMove: (blockId: string, phase: AnimationPhase, direction: -1 | 1) => void
+  onSelect: (blockId: string, phase: AnimationPhase) => void
+  slideName: string
+}
+
+function BuildOrderModal({
+  activeBlockId,
+  animationTab,
+  buildOrder,
+  onClose,
+  onMove,
+  onSelect,
+  slideName,
+}: BuildOrderModalProps) {
+  return (
+    <div className="build-order-modal-backdrop" onClick={onClose}>
+      <div
+        className="build-order-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="buildOrderModalTitle"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="build-order-modal__header">
+          <div className="build-order-modal__title-wrap">
+            <span className="build-order-modal__eyebrow">动画编排</span>
+            <h2 id="buildOrderModalTitle">构建顺序</h2>
+            <p>{slideName}</p>
+          </div>
+          <button
+            className="build-order-modal__close"
+            onClick={onClose}
+            aria-label="关闭构建顺序"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {buildOrder.length === 0 ? (
+          <div className="build-order-modal__empty">
+            <strong>当前页面还没有任何对象动画</strong>
+            <p>先为对象添加入场、动作或退场效果，再回来调整顺序。</p>
+          </div>
+        ) : (
+          <div className="build-order-modal__list">
+            {buildOrder.map((item, index) => (
+              <div
+                key={`${item.blockId}-${item.phase}`}
+                className={`build-order-modal__item ${
+                  item.blockId === activeBlockId && item.phase === animationTab ? 'is-active' : ''
+                }`}
+                onClick={() => onSelect(item.blockId, item.phase)}
+              >
+                <div className="build-order-modal__index">{index + 1}</div>
+                <div className="build-order-modal__copy">
+                  <div className="build-order-modal__topline">
+                    <strong>{item.blockName}</strong>
+                    <span className={`build-order-phase build-order-phase--${item.phase}`}>
+                      {getPhaseLabel(item.phase)}
+                    </span>
+                  </div>
+                  <div className="build-order-modal__meta">
+                    <span>{getEffectLabel(item.phase, item.animation.effect)}</span>
+                    <span>{getTriggerLabel(item.animation.trigger)}</span>
+                    {'loop' in item.animation && item.animation.loop && <span>循环播放</span>}
+                    <span>{formatDuration(item.animation.duration)}</span>
+                  </div>
+                </div>
+                <div className="build-order-controls" onClick={(event) => event.stopPropagation()}>
+                  <button
+                    onClick={() => onMove(item.blockId, item.phase, -1)}
+                    disabled={index === 0}
+                    aria-label="上移"
+                  >
+                    <ChevronUp size={14} />
+                  </button>
+                  <button
+                    onClick={() => onMove(item.blockId, item.phase, 1)}
+                    disabled={index === buildOrder.length - 1}
+                    aria-label="下移"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }

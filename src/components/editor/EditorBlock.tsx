@@ -81,6 +81,7 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
         opacity: block.hidden && !isPlayMode ? Math.min(block.opacity, 0.2) : block.opacity,
         transform: `rotate(${localTransform.rotation}deg)`,
       }}
+      data-block-id={block.id}
       data-anim={block.anim}
       data-trigger={block.trigger}
       data-duration={block.duration}

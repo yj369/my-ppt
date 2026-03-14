@@ -1,5 +1,11 @@
 import { v4 as uuidv4 } from 'uuid'
 import heroImage from '../assets/hero.png'
+import {
+  BUILD_IN_OPTIONS,
+  createDefaultBlockAnimations,
+  normalizeBlockAnimations,
+  normalizeSlideAnimations,
+} from './animations'
 import type {
   BlockAppearance,
   EditorBlock,
@@ -53,15 +59,7 @@ export const TRANSITION_OPTIONS = [
   { id: 'dissolve', label: '溶解' },
 ] as const
 
-export const ANIMATION_OPTIONS = [
-  { id: 'none', label: '无动画' },
-  { id: 'fade-up', label: '向上浮入' },
-  { id: 'fade-left', label: '向左滑入' },
-  { id: 'scale-in', label: '弹入' },
-  { id: 'rotate-in', label: '旋入' },
-  { id: 'blur-in', label: '清晰显现' },
-  { id: 'pop', label: '轻弹放大' },
-] as const
+export const ANIMATION_OPTIONS = BUILD_IN_OPTIONS
 
 export const INSERT_OPTIONS: Array<{ id: ElementType; label: string; category: string }> = [
   { id: 'heading', label: '标题', category: '文本' },
@@ -129,18 +127,18 @@ export function getNextZIndex(blocks: EditorBlock[]) {
 }
 
 export function cloneBlock(block: EditorBlock, offset = 28): EditorBlock {
-  return {
+  return normalizeBlockAnimations({
     ...block,
     id: uuidv4(),
     name: `${block.name} 副本`,
     x: block.x + offset,
     y: block.y + offset,
     zIndex: block.zIndex + 1,
-  }
+  })
 }
 
 export function cloneSlide(slide: Slide): Slide {
-  return {
+  return normalizeSlideAnimations({
     ...slide,
     id: uuidv4(),
     name: `${slide.name} 副本`,
@@ -148,7 +146,7 @@ export function cloneSlide(slide: Slide): Slide {
       ...cloneBlock(block, 12 + index * 2),
       zIndex: block.zIndex,
     })),
-  }
+  })
 }
 
 export function createInsertedBlock(
@@ -173,13 +171,19 @@ export function createBlockPreset(type: ElementType, overrides: BlockOverrides =
     ...overrides.appearance,
   }
 
-  return {
+  return normalizeBlockAnimations({
     ...preset,
     ...overrides,
     appearance,
     id: overrides.id ?? uuidv4(),
     name: overrides.name ?? preset.name,
-  }
+    animations: overrides.animations ?? preset.animations ?? createDefaultBlockAnimations({
+      effect: overrides.anim ?? preset.anim,
+      trigger: overrides.trigger ?? preset.trigger,
+      duration: overrides.duration ?? preset.duration,
+      delay: overrides.delay ?? preset.delay,
+    }),
+  })
 }
 
 function getPresetByType(type: ElementType): EditorBlock {
@@ -845,9 +849,16 @@ export function createDemoPresentation(): PresentationSnapshot {
   return {
     presentationName: '未命名 1',
     theme,
-    slides,
+    slides: slides.map((slide) => normalizeSlideAnimations(slide)),
     currentSlideId: slides[0]?.id ?? null,
     showGrid: false,
     showGuides: false,
+  }
+}
+
+export function normalizePresentationSnapshot(snapshot: PresentationSnapshot): PresentationSnapshot {
+  return {
+    ...snapshot,
+    slides: snapshot.slides.map((slide) => normalizeSlideAnimations(slide)),
   }
 }

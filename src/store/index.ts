@@ -1,13 +1,21 @@
 import { create } from 'zustand'
 import {
+  moveSlideBlockAnimation,
+  normalizeBlockAnimations,
+  normalizeSlideAnimations,
+  updateSlideBlockAnimation,
+} from '../lib/animations'
+import {
   cloneBlock,
   cloneSlide,
   createDemoPresentation,
   createInsertedBlock,
   createSlideFromLayout,
   getNextZIndex,
+  normalizePresentationSnapshot,
 } from '../lib/presentation'
 import type {
+  AnimationPhase,
   BlockAppearance,
   EditorBlock,
   ElementType,
@@ -16,6 +24,7 @@ import type {
   PresentationTheme,
   Slide,
   SlideLayout,
+  TriggerType,
 } from '../types/editor'
 
 const STORAGE_KEY = 'tarot-keynote-lab-v5'
@@ -57,6 +66,20 @@ export type EditorState = {
   insertBlock: (type: ElementType, position?: { x: number; y: number }) => void
   addBlock: (slideId: string, block: EditorBlock) => void
   updateBlock: (slideId: string, blockId: string, updates: BlockUpdate) => void
+  updateBlockAnimation: (
+    slideId: string,
+    blockId: string,
+    phase: AnimationPhase,
+    updates: Partial<{
+      effect: string
+      trigger: TriggerType
+      duration: number
+      delay: number
+      order: number
+      loop: boolean
+    }>,
+  ) => void
+  moveBlockAnimation: (slideId: string, blockId: string, phase: AnimationPhase, direction: -1 | 1) => void
   duplicateBlock: (slideId: string, blockId: string) => void
   deleteBlock: (slideId: string, blockId: string) => void
   bringBlockForward: (slideId: string, blockId: string) => void
@@ -89,23 +112,23 @@ function getSnapshot(state: EditorState): PresentationSnapshot {
 
 function loadInitialSnapshot() {
   if (typeof window === 'undefined') {
-    return createDemoPresentation()
+    return normalizePresentationSnapshot(createDemoPresentation())
   }
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) {
-      return createDemoPresentation()
+      return normalizePresentationSnapshot(createDemoPresentation())
     }
 
     const parsed = JSON.parse(raw) as PresentationSnapshot
     if (!Array.isArray(parsed.slides) || parsed.slides.length === 0) {
-      return createDemoPresentation()
+      return normalizePresentationSnapshot(createDemoPresentation())
     }
 
-    return parsed
+    return normalizePresentationSnapshot(parsed)
   } catch {
-    return createDemoPresentation()
+    return normalizePresentationSnapshot(createDemoPresentation())
   }
 }
 
@@ -251,20 +274,24 @@ export const useEditorStore = create<EditorState>((set) => ({
       ...('showGuides' in updates ? { showGuides: updates.showGuides ?? state.showGuides } : {}),
     })),
   importPresentation: (snapshot) =>
-    set(() => ({
-      presentationName: snapshot.presentationName,
-      theme: snapshot.theme,
-      slides: snapshot.slides,
-      currentSlideId: snapshot.currentSlideId ?? snapshot.slides[0]?.id ?? null,
-      activeBlockId: null,
-      activeInspector: 'document',
-      isPlayMode: false,
-      navigationDirection: 0,
-      showGrid: snapshot.showGrid,
-      showGuides: snapshot.showGuides,
-    })),
+    set(() => {
+      const normalized = normalizePresentationSnapshot(snapshot)
+
+      return {
+        presentationName: normalized.presentationName,
+        theme: normalized.theme,
+        slides: normalized.slides,
+        currentSlideId: normalized.currentSlideId ?? normalized.slides[0]?.id ?? null,
+        activeBlockId: null,
+        activeInspector: 'document',
+        isPlayMode: false,
+        navigationDirection: 0,
+        showGrid: normalized.showGrid,
+        showGuides: normalized.showGuides,
+      }
+    }),
   resetPresentation: () => {
-    const demo = createDemoPresentation()
+    const demo = normalizePresentationSnapshot(createDemoPresentation())
     set(() => ({
       presentationName: demo.presentationName,
       theme: demo.theme,
@@ -304,10 +331,16 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((state) => ({
       slides: state.slides.map((slide) =>
         slide.id === slideId
-          ? {
+          ? normalizeSlideAnimations({
               ...slide,
-              blocks: [...slide.blocks, { ...block, zIndex: block.zIndex || getNextZIndex(slide.blocks) }],
-            }
+              blocks: [
+                ...slide.blocks,
+                normalizeBlockAnimations({
+                  ...block,
+                  zIndex: block.zIndex || getNextZIndex(slide.blocks),
+                }),
+              ],
+            })
           : slide,
       ),
     })),
@@ -332,6 +365,22 @@ export const useEditorStore = create<EditorState>((set) => ({
           : slide,
       ),
     })),
+  updateBlockAnimation: (slideId, blockId, phase, updates) =>
+    set((state) => ({
+      slides: state.slides.map((slide) =>
+        slide.id === slideId
+          ? updateSlideBlockAnimation(slide, blockId, phase, updates)
+          : slide,
+      ),
+    })),
+  moveBlockAnimation: (slideId, blockId, phase, direction) =>
+    set((state) => ({
+      slides: state.slides.map((slide) =>
+        slide.id === slideId
+          ? moveSlideBlockAnimation(slide, blockId, phase, direction)
+          : slide,
+      ),
+    })),
   duplicateBlock: (slideId, blockId) =>
     set((state) => {
       let duplicatedId: string | null = null
@@ -350,10 +399,10 @@ export const useEditorStore = create<EditorState>((set) => ({
           const duplicated = cloneBlock(source)
           duplicatedId = duplicated.id
 
-          return {
+          return normalizeSlideAnimations({
             ...slide,
             blocks: [...slide.blocks, { ...duplicated, zIndex: getNextZIndex(slide.blocks) }],
-          }
+          })
         }),
         activeBlockId: duplicatedId ?? state.activeBlockId,
       }
@@ -362,10 +411,10 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((state) => ({
       slides: state.slides.map((slide) =>
         slide.id === slideId
-          ? {
+          ? normalizeSlideAnimations({
               ...slide,
               blocks: slide.blocks.filter((block) => block.id !== blockId),
-            }
+            })
           : slide,
       ),
       activeBlockId: state.activeBlockId === blockId ? null : state.activeBlockId,

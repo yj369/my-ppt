@@ -1,11 +1,17 @@
 import type { MutableRefObject } from 'react'
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
+import { getSlideBuildOrder } from '../../lib/animations'
+import {
+  initializeBlockForPlay,
+  playSequenceItem,
+} from '../../lib/animation-runtime'
+import type { RuntimeSequenceItem } from '../../lib/animation-runtime'
 import { useEditorStore } from '../../store'
-import type { SlideTransition } from '../../types/editor'
+import type { EditorBlock, SlideTransition } from '../../types/editor'
 
 type SequenceStep = {
-  elements: HTMLElement[]
+  items: RuntimeSequenceItem[]
   trigger: 'auto' | 'click'
 }
 
@@ -51,24 +57,23 @@ export function PlayModeController() {
       return
     }
 
-    const blocks = Array.from(
-      slideContent.querySelectorAll<HTMLElement>('.editor-block'),
+    const blockElements = new Map(
+      Array.from(slideContent.querySelectorAll<HTMLElement>('.editor-block')).map((element) => [
+        element.dataset.blockId ?? '',
+        element,
+      ]),
     )
 
-    blocks.forEach((element) => {
-      if (element.dataset.hidden === 'true') {
-        gsap.set(element, { display: 'none' })
+    currentSlide.blocks.forEach((block) => {
+      const element = blockElements.get(block.id)
+      if (!element) {
         return
       }
 
-      if ((element.dataset.anim ?? 'none') === 'none') {
-        gsap.set(element, { autoAlpha: Number(element.dataset.opacity ?? 1), clearProps: 'transform' })
-      } else {
-        gsap.set(element, { autoAlpha: 0, pointerEvents: 'none' })
-      }
+      initializeBlockForPlay(element, block)
     })
 
-    sequenceRef.current = buildSequenceSteps(blocks)
+    sequenceRef.current = buildSequenceSteps(currentSlide.blocks, blockElements)
     stepIndexRef.current = 0
     clearAutoAdvance(autoAdvanceRef)
     playSlideTransition(
@@ -153,24 +158,43 @@ export function PlayModeController() {
   return null
 }
 
-function buildSequenceSteps(elements: HTMLElement[]) {
-  const animated = elements
-    .filter((element) => element.dataset.hidden !== 'true' && (element.dataset.anim ?? 'none') !== 'none')
-    .sort((left, right) => Number(left.dataset.zIndex ?? 0) - Number(right.dataset.zIndex ?? 0))
-
+function buildSequenceSteps(blocks: EditorBlock[], blockElements: Map<string, HTMLElement>) {
   const steps: SequenceStep[] = []
+  const blockMap = new Map(blocks.map((block) => [block.id, block]))
 
-  animated.forEach((element) => {
-    const trigger = element.dataset.trigger
+  getSlideBuildOrder({
+    id: '',
+    name: '',
+    layout: 'blank',
+    transition: 'fade',
+    transitionDuration: 0.8,
+    bg: 'theme',
+    notes: '',
+    skipped: false,
+    blocks,
+  }).forEach((item) => {
+    const element = blockElements.get(item.blockId)
+    const block = blockMap.get(item.blockId)
 
-    if (trigger === 'withPrev' && steps.length > 0) {
-      steps[steps.length - 1].elements.push(element)
+    if (!element || !block) {
+      return
+    }
+
+    const nextItem: RuntimeSequenceItem = {
+      element,
+      phase: item.phase,
+      animation: item.animation,
+      opacity: block.opacity,
+    }
+
+    if (item.animation.trigger === 'withPrev' && steps.length > 0) {
+      steps[steps.length - 1].items.push(nextItem)
       return
     }
 
     steps.push({
-      elements: [element],
-      trigger: trigger === 'onClick' ? 'click' : 'auto',
+      items: [nextItem],
+      trigger: item.animation.trigger === 'onClick' ? 'click' : 'auto',
     })
   })
 
@@ -189,7 +213,7 @@ function advanceSequence(
   }
 
   const step = sequence[stepIndexRef.current]
-  step.elements.forEach((element) => animateBlock(element))
+  step.items.forEach((item) => playSequenceItem(item))
   stepIndexRef.current += 1
 
   if (stepIndexRef.current >= sequence.length) {
@@ -206,68 +230,10 @@ function advanceSequence(
   }, getStepDuration(step))
 }
 
-function animateBlock(element: HTMLElement) {
-  const duration = Number(element.dataset.duration ?? 0.8)
-  const delay = Number(element.dataset.delay ?? 0)
-  const opacity = Number(element.dataset.opacity ?? 1)
-  const animation = element.dataset.anim ?? 'none'
-
-  gsap.set(element, { pointerEvents: 'auto', display: 'block' })
-
-  if (animation === 'fade-up') {
-    gsap.fromTo(
-      element,
-      { y: 28, autoAlpha: 0 },
-      { y: 0, autoAlpha: opacity, duration, delay, ease: 'power3.out' },
-    )
-    return
-  }
-
-  if (animation === 'fade-left') {
-    gsap.fromTo(
-      element,
-      { x: 28, autoAlpha: 0 },
-      { x: 0, autoAlpha: opacity, duration, delay, ease: 'power3.out' },
-    )
-    return
-  }
-
-  if (animation === 'scale-in' || animation === 'pop') {
-    gsap.fromTo(
-      element,
-      { scale: animation === 'pop' ? 0.92 : 0.96, autoAlpha: 0 },
-      { scale: 1, autoAlpha: opacity, duration, delay, ease: 'power3.out' },
-    )
-    return
-  }
-
-  if (animation === 'rotate-in') {
-    gsap.fromTo(
-      element,
-      { rotate: '8deg', autoAlpha: 0 },
-      { rotate: '0deg', autoAlpha: opacity, duration, delay, ease: 'power2.out' },
-    )
-    return
-  }
-
-  if (animation === 'blur-in') {
-    gsap.fromTo(
-      element,
-      { filter: 'blur(12px)', autoAlpha: 0 },
-      { filter: 'blur(0px)', autoAlpha: opacity, duration, delay, ease: 'power2.out' },
-    )
-    return
-  }
-
-  gsap.to(element, { autoAlpha: opacity, duration, delay, ease: 'power2.out' })
-}
-
 function getStepDuration(step: SequenceStep) {
   return Math.max(
-    ...step.elements.map((element) => {
-      const duration = Number(element.dataset.duration ?? 0.8)
-      const delay = Number(element.dataset.delay ?? 0)
-      return (duration + delay) * 1000
+    ...step.items.map((item) => {
+      return (item.animation.duration + item.animation.delay) * 1000
     }),
   )
 }

@@ -73,10 +73,10 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
         .filter(Boolean)
         .join(' ')}
       style={{
-        left: localTransform.x,
-        top: localTransform.y,
-        width: localTransform.width,
-        height: localTransform.height,
+        left: `${localTransform.x}px`,
+        top: `${localTransform.y}px`,
+        width: `${localTransform.width}px`,
+        height: `${localTransform.height}px`,
         zIndex: block.zIndex,
         opacity: block.hidden && !isPlayMode ? Math.min(block.opacity, 0.2) : block.opacity,
         transform: `rotate(${localTransform.rotation}deg)`,

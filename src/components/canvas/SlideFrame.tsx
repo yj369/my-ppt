@@ -33,6 +33,7 @@ export function SlideFrame({ slideId, interactive }: SlideFrameProps) {
       <div
         id={interactive ? 'slideContent' : undefined}
         className="slide-content"
+        key={interactive ? (isPlayMode ? 'play' : 'edit') : 'thumb'}
       >
         {slide?.blocks.map((block) => (
           <EditorBlock

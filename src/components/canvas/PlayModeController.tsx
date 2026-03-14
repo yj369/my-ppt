@@ -24,7 +24,10 @@ export function PlayModeController() {
   useEffect(() => {
     if (!isPlayMode) {
       document.body.classList.remove('play-mode')
-      gsap.set('.editor-block', { clearProps: 'all' })
+      const transitionLayer = document.getElementById('transitionLayer')
+      if (transitionLayer) {
+        gsap.set(transitionLayer, { clearProps: 'all' })
+      }
       return
     }
 

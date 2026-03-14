@@ -1,0 +1,80 @@
+{
+  "hash": "fefd57c7",
+  "configHash": "14ec8b58",
+  "lockfileHash": "e3786f21",
+  "browserHash": "4f2b60c2",
+  "optimized": {
+    "@react-three/fiber": {
+      "src": "../../node_modules/.pnpm/@react-three+fiber@9.5.0_@types+react@19.2.14_react-dom@19.2.4_react@19.2.4__react@19.2.4_three@0.183.2/node_modules/@react-three/fiber/dist/react-three-fiber.esm.js",
+      "file": "@react-three_fiber.js",
+      "fileHash": "8164bdb8",
+      "needsInterop": false
+    },
+    "gsap": {
+      "src": "../../node_modules/.pnpm/gsap@3.14.2/node_modules/gsap/index.js",
+      "file": "gsap.js",
+      "fileHash": "d8360503",
+      "needsInterop": false
+    },
+    "lucide-react": {
+      "src": "../../node_modules/.pnpm/lucide-react@0.577.0_react@19.2.4/node_modules/lucide-react/dist/esm/lucide-react.js",
+      "file": "lucide-react.js",
+      "fileHash": "827fe938",
+      "needsInterop": false
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/.pnpm/react-dom@19.2.4_react@19.2.4/node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "17b2f0a3",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/.pnpm/react@19.2.4/node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "c1b6a15f",
+      "needsInterop": true
+    },
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/.pnpm/react@19.2.4/node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "ed191223",
+      "needsInterop": true
+    },
+    "three": {
+      "src": "../../node_modules/.pnpm/three@0.183.2/node_modules/three/build/three.module.js",
+      "file": "three.js",
+      "fileHash": "32549de9",
+      "needsInterop": false
+    },
+    "uuid": {
+      "src": "../../node_modules/.pnpm/uuid@13.0.0/node_modules/uuid/dist/index.js",
+      "file": "uuid.js",
+      "fileHash": "b871b057",
+      "needsInterop": false
+    },
+    "zustand": {
+      "src": "../../node_modules/.pnpm/zustand@5.0.11_@types+react@19.2.14_react@19.2.4_use-sync-external-store@1.6.0_react@19.2.4_/node_modules/zustand/esm/index.mjs",
+      "file": "zustand.js",
+      "fileHash": "3ce2320a",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-BoAXSpZd": {
+      "file": "chunk-BoAXSpZd.js",
+      "isDynamicEntry": false
+    },
+    "scheduler-Cs-6LkgJ": {
+      "file": "scheduler-Cs-6LkgJ.js",
+      "isDynamicEntry": false
+    },
+    "three.module-sHCKEdk5": {
+      "file": "three.module-sHCKEdk5.js",
+      "isDynamicEntry": false
+    },
+    "vanilla-CsLEz01K": {
+      "file": "vanilla-CsLEz01K.js",
+      "isDynamicEntry": false
+    }
+  }
+}

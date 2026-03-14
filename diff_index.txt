@@ -1,0 +1,45 @@
+diff --git a/src/index.css b/src/index.css
+index 4d9055a..0717831 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -2,9 +2,39 @@
+ @tailwind components;
+ @tailwind utilities;
+ 
++:root {
++  /* 编辑器 UI 颜色 */
++  --mac-bg: #1e1e1e;
++  --mac-panel: #2d2d2d;
++  --mac-border: #434343;
++  --mac-text: #ffffff;
++  --mac-text-muted: #98989d;
++  --mac-accent: #0A84FF;
++  --mac-accent-hover: #0060d1;
++  --mac-selected: rgba(10, 132, 255, 0.3);
++  
++  /* 画布设计 Token */
++  --bg: #05060d;
++  --text: #f8f4ff;
++  --muted: rgba(248,244,255,.72);
++  --pink: #ff88cd;
++  --violet: #9f80ff;
++  --cyan: #7ce8ff;
++  --shadow: 0 30px 80px rgba(0,0,0,.6);
++  --serif: "Cormorant Garamond", "STSong", "Songti SC", Georgia, serif;
++  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
++}
++
+ @layer base {
++  html, body {
++    height: 100%;
++    width: 100%;
++  }
+   body {
+-    @apply bg-edBg text-edText overflow-hidden w-full h-full m-0 flex flex-col font-sans;
++    @apply bg-macBg text-macText overflow-hidden m-0 flex flex-col font-sans;
++  }
++  #root {
++    @apply w-full h-full flex flex-col overflow-hidden;
+   }
+ }
+ 

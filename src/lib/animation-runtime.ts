@@ -9,14 +9,16 @@ export type RuntimeSequenceItem = {
   opacity: number
 }
 
-const BASE_STATE = {
-  x: 0,
-  y: 0,
-  scale: 1,
-  rotate: 0,
-  rotateY: 0,
-  filter: 'blur(0px)',
-  transformOrigin: '50% 50%',
+function getBaseState(block: EditorBlock) {
+  return {
+    x: 0,
+    y: 0,
+    scale: 1,
+    rotate: block.rotation,
+    rotateY: 0,
+    filter: 'blur(0px)',
+    transformOrigin: '50% 50%',
+  }
 }
 
 const activeRuntimeAnimations = new WeakMap<HTMLElement, gsap.core.Animation>()
@@ -36,9 +38,7 @@ function rememberRuntimeAnimation(element: HTMLElement, animation: gsap.core.Ani
 
 export function restoreBlockAfterPreview(element: HTMLElement, block: EditorBlock) {
   stopElementRuntime(element)
-  gsap.set(element, {
-    clearProps: 'x,y,scale,rotate,rotateY,filter,transformOrigin,display,visibility,pointerEvents,opacity',
-  })
+  gsap.set(element, getBaseState(block))
   gsap.set(element, {
     display: 'block',
     autoAlpha: block.hidden ? Math.min(block.opacity, 0.2) : block.opacity,
@@ -50,7 +50,7 @@ export function initializeBlockForPlay(element: HTMLElement, block: EditorBlock)
   const animations = getBlockAnimations(block)
 
   stopElementRuntime(element)
-  gsap.set(element, BASE_STATE)
+  gsap.set(element, getBaseState(block))
 
   if (block.hidden) {
     gsap.set(element, { display: 'none', autoAlpha: 0, pointerEvents: 'none' })
@@ -87,7 +87,7 @@ export function previewBlockPhase(
   }
 
   stopElementRuntime(element)
-  gsap.set(element, BASE_STATE)
+  gsap.set(element, getBaseState(block))
   gsap.set(element, { display: 'block', autoAlpha: block.opacity, pointerEvents: 'auto' })
 
   if (phase === 'buildIn') {
@@ -122,6 +122,7 @@ function runPhaseAnimation(
 
 function animateBuildIn(item: RuntimeSequenceItem) {
   const { element, animation, opacity } = item
+  const blockRotation = Number(gsap.getProperty(element, 'rotation')) || 0
 
   gsap.set(element, { display: 'block', pointerEvents: 'auto' })
 
@@ -155,8 +156,8 @@ function animateBuildIn(item: RuntimeSequenceItem) {
   if (animation.effect === 'rotate-in') {
     rememberRuntimeAnimation(element, gsap.fromTo(
       element,
-      { rotate: '8deg', autoAlpha: 0 },
-      { rotate: '0deg', autoAlpha: opacity, duration: animation.duration, delay: animation.delay, ease: 'power2.out' },
+      { rotate: blockRotation + 8, autoAlpha: 0 },
+      { rotate: blockRotation, autoAlpha: opacity, duration: animation.duration, delay: animation.delay, ease: 'power2.out' },
     ))
     return
   }
@@ -249,7 +250,16 @@ function animateBuildOut(item: RuntimeSequenceItem, restoreAfter: boolean) {
     pointerEvents: 'none',
     onComplete: () => {
       if (restoreAfter) {
-        gsap.set(element, BASE_STATE)
+        const rotation = Number(gsap.getProperty(element, 'rotation')) || 0
+        gsap.set(element, {
+          x: 0,
+          y: 0,
+          scale: 1,
+          rotate: rotation,
+          rotateY: 0,
+          filter: 'blur(0px)',
+          transformOrigin: '50% 50%',
+        })
         gsap.set(element, { display: 'block', autoAlpha: opacity, pointerEvents: 'auto' })
         return
       }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { getSelectionIdsForBlock } from '../../lib/selection'
 import type { EditorBlock as BlockType } from '../../types/editor'
 import { useEditorStore } from '../../store'
 import { BlockRenderer } from './BlockRenderer'
@@ -12,8 +13,13 @@ type EditorBlockProps = {
 
 export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
   const {
+    slides,
     activeBlockId,
+    selectedBlockIds,
     setActiveBlock,
+    setPrimarySelectedBlock,
+    setSelectedBlocks,
+    toggleBlockSelection,
     updateBlock,
     deleteBlock,
     isPlayMode,
@@ -29,7 +35,10 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
     rotation: block.rotation,
   })
 
-  const isSelected = interactive && activeBlockId === block.id
+  const slide = slides.find((item) => item.id === slideId) ?? null
+  const blockSelectionIds = slide ? getSelectionIdsForBlock(slide.blocks, block.id) : [block.id]
+  const isSelected = interactive && selectedBlockIds.includes(block.id)
+  const isPrimarySelected = interactive && activeBlockId === block.id
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -66,6 +75,7 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
         'editor-block',
         interactive ? 'is-draggable' : 'is-static',
         isSelected ? 'is-selected' : '',
+        isPrimarySelected ? 'is-primary-selected' : '',
         isEditing ? 'is-editing' : '',
         block.locked ? 'is-locked' : '',
         block.hidden ? 'is-hidden' : '',
@@ -90,15 +100,36 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
       data-hidden={block.hidden ? 'true' : 'false'}
       data-z-index={block.zIndex}
       data-type={block.type}
-      onMouseDownCapture={() => {
+      onDragStartCapture={(event) => {
+        if (interactive && !isPlayMode) {
+          event.preventDefault()
+        }
+      }}
+      onMouseDownCapture={(event) => {
         if (!interactive || isPlayMode) {
+          return
+        }
+
+        if (event.metaKey || event.ctrlKey || event.shiftKey) {
+          blockSelectionIds.forEach((blockId) => toggleBlockSelection(blockId))
+          event.stopPropagation()
+          return
+        }
+
+        if (block.groupId) {
+          setSelectedBlocks(blockSelectionIds, block.id)
+          return
+        }
+
+        if (isSelected) {
+          setPrimarySelectedBlock(block.id)
           return
         }
 
         setActiveBlock(block.id)
       }}
       onDoubleClickCapture={(event) => {
-        if (!interactive || isPlayMode || block.locked) {
+        if (!interactive || isPlayMode || block.locked || selectedBlockIds.length > 1) {
           return
         }
 
@@ -111,13 +142,15 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
       {interactive && !isPlayMode && (
         <>
           <TransformControls
+            block={block}
             blockRef={blockRef}
+            slideId={slideId}
             localTransform={localTransform}
             setLocalTransform={setLocalTransform}
             commitTransform={commitTransform}
             disabled={block.locked}
           />
-          {isSelected && (
+          {isPrimarySelected && (
             <div className="block-chip-group">
               <span className="block-chip">{block.name}</span>
               <button

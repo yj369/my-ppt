@@ -1,3 +1,4 @@
+import type { SelectionRect } from '../../lib/selection'
 import { resolveSlideBackground } from '../../lib/presentation'
 import { useEditorStore } from '../../store'
 import { EditorBlock } from '../editor/EditorBlock'
@@ -6,9 +7,10 @@ import { SlideBackground } from './SlideBackground'
 type SlideFrameProps = {
   slideId: string | null
   interactive: boolean
+  marqueeRect?: SelectionRect | null
 }
 
-export function SlideFrame({ slideId, interactive }: SlideFrameProps) {
+export function SlideFrame({ slideId, interactive, marqueeRect = null }: SlideFrameProps) {
   const { slides, theme, showGuides, isPlayMode } = useEditorStore()
   const slide = slides.find((item) => item.id === slideId) ?? null
   const background = resolveSlideBackground(theme, slide?.bg ?? 'theme')
@@ -43,6 +45,18 @@ export function SlideFrame({ slideId, interactive }: SlideFrameProps) {
             interactive={interactive}
           />
         ))}
+
+        {interactive && marqueeRect && (
+          <div
+            className="selection-marquee"
+            style={{
+              left: `${marqueeRect.x}px`,
+              top: `${marqueeRect.y}px`,
+              width: `${marqueeRect.width}px`,
+              height: `${marqueeRect.height}px`,
+            }}
+          />
+        )}
       </div>
 
       {interactive && (

@@ -1,5 +1,6 @@
 import type { DragEvent, MouseEvent, WheelEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { getSelectionIdsForRect, normalizeSelectionRect, uniqueIds, type SelectionRect } from '../../lib/selection'
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from '../../lib/presentation'
 import { useEditorStore } from '../../store'
 import type { ElementType } from '../../types/editor'
@@ -15,6 +16,7 @@ function isTypingTarget(target: EventTarget | null) {
 
 export function CanvasViewport() {
   const {
+    slides,
     camX,
     camY,
     camZoom,
@@ -22,14 +24,17 @@ export function CanvasViewport() {
     isPlayMode,
     showGrid,
     currentSlideId,
-    activeBlockId,
+    selectedBlockIds,
     insertBlock,
-    updateBlock,
-    deleteBlock,
+    deleteBlocks,
     duplicateBlock,
     duplicateSlide,
+    moveBlocksBy,
+    groupBlocks,
+    ungroupBlocks,
     togglePlayMode,
     setActiveBlock,
+    setSelectedBlocks,
   } = useEditorStore()
 
   const viewportRef = useRef<HTMLElement>(null)
@@ -37,6 +42,15 @@ export function CanvasViewport() {
   const [spacePressed, setSpacePressed] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   const [camStart, setCamStart] = useState({ x: 0, y: 0 })
+  const [marqueeRect, setMarqueeRect] = useState<SelectionRect | null>(null)
+  const marqueeStateRef = useRef<{
+    startX: number
+    startY: number
+    additive: boolean
+    baseSelection: string[]
+  } | null>(null)
+  const suppressCanvasClickRef = useRef(false)
+  const currentSlide = slides.find((slide) => slide.id === currentSlideId) ?? null
 
   const fitCanvasCenter = (playMode = false) => {
     const viewport = viewportRef.current
@@ -107,35 +121,46 @@ export function CanvasViewport() {
         return
       }
 
-      if ((event.key === 'Backspace' || event.key === 'Delete') && state.currentSlideId && state.activeBlockId) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'g' && state.currentSlideId) {
         event.preventDefault()
-        deleteBlock(state.currentSlideId, state.activeBlockId)
+        if (event.shiftKey) {
+          ungroupBlocks(state.currentSlideId, state.selectedBlockIds)
+        } else {
+          groupBlocks(state.currentSlideId, state.selectedBlockIds)
+        }
         return
       }
 
-      if (!state.currentSlideId || !state.activeBlockId) {
+      if ((event.key === 'Backspace' || event.key === 'Delete') && state.currentSlideId && state.selectedBlockIds.length > 0) {
+        event.preventDefault()
+        deleteBlocks(state.currentSlideId, state.selectedBlockIds)
+        return
+      }
+
+      if (!state.currentSlideId || state.selectedBlockIds.length === 0) {
         return
       }
 
       const currentSlide = state.slides.find((slide) => slide.id === state.currentSlideId)
-      const activeBlock = currentSlide?.blocks.find((block) => block.id === state.activeBlockId)
-      if (!activeBlock || activeBlock.locked) {
+      const selectedBlocks = currentSlide?.blocks.filter((block) => state.selectedBlockIds.includes(block.id)) ?? []
+      const movableBlockIds = selectedBlocks.filter((block) => !block.locked).map((block) => block.id)
+      if (movableBlockIds.length === 0) {
         return
       }
 
       const distance = event.shiftKey ? 10 : 1
       if (event.key === 'ArrowUp') {
         event.preventDefault()
-        updateBlock(state.currentSlideId, state.activeBlockId, { y: activeBlock.y - distance })
+        moveBlocksBy(state.currentSlideId, movableBlockIds, 0, -distance)
       } else if (event.key === 'ArrowDown') {
         event.preventDefault()
-        updateBlock(state.currentSlideId, state.activeBlockId, { y: activeBlock.y + distance })
+        moveBlocksBy(state.currentSlideId, movableBlockIds, 0, distance)
       } else if (event.key === 'ArrowLeft') {
         event.preventDefault()
-        updateBlock(state.currentSlideId, state.activeBlockId, { x: activeBlock.x - distance })
+        moveBlocksBy(state.currentSlideId, movableBlockIds, -distance, 0)
       } else if (event.key === 'ArrowRight') {
         event.preventDefault()
-        updateBlock(state.currentSlideId, state.activeBlockId, { x: activeBlock.x + distance })
+        moveBlocksBy(state.currentSlideId, movableBlockIds, distance, 0)
       }
     }
 
@@ -151,7 +176,7 @@ export function CanvasViewport() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [deleteBlock, duplicateBlock, duplicateSlide, isPlayMode, togglePlayMode, updateBlock])
+  }, [deleteBlocks, duplicateBlock, duplicateSlide, groupBlocks, isPlayMode, moveBlocksBy, togglePlayMode, ungroupBlocks])
 
   const handleMouseDown = (event: MouseEvent) => {
     if (isPlayMode) {
@@ -163,11 +188,53 @@ export function CanvasViewport() {
       setPanStart({ x: event.clientX, y: event.clientY })
       setCamStart({ x: camX, y: camY })
       event.preventDefault()
+      return
     }
+
+    if (event.button !== 0) {
+      return
+    }
+
+    const target = event.target as HTMLElement
+    if (target.closest('.editor-block') || target.closest('.zoom-toolbar') || isTypingTarget(target)) {
+      return
+    }
+
+    const pointer = getSlidePointer(event.clientX, event.clientY)
+    if (!pointer) {
+      return
+    }
+
+    marqueeStateRef.current = {
+      startX: pointer.x,
+      startY: pointer.y,
+      additive: event.metaKey || event.ctrlKey || event.shiftKey,
+      baseSelection: event.metaKey || event.ctrlKey || event.shiftKey ? selectedBlockIds : [],
+    }
+    setMarqueeRect({
+      x: pointer.x,
+      y: pointer.y,
+      width: 0,
+      height: 0,
+    })
+    event.preventDefault()
   }
 
   const handleMouseMove = (event: MouseEvent) => {
     if (!isPanning) {
+      const marqueeState = marqueeStateRef.current
+      if (!marqueeState) {
+        return
+      }
+
+      const pointer = getSlidePointer(event.clientX, event.clientY)
+      if (!pointer) {
+        return
+      }
+
+      setMarqueeRect(
+        normalizeSelectionRect(marqueeState.startX, marqueeState.startY, pointer.x, pointer.y),
+      )
       return
     }
 
@@ -180,6 +247,34 @@ export function CanvasViewport() {
 
   const handleMouseUp = () => {
     setIsPanning(false)
+
+    const marqueeState = marqueeStateRef.current
+    if (!marqueeState) {
+      return
+    }
+
+    const nextRect = marqueeRect ?? {
+      x: marqueeState.startX,
+      y: marqueeState.startY,
+      width: 0,
+      height: 0,
+    }
+    const nextIds = currentSlide
+      ? getSelectionIdsForRect(currentSlide.blocks, nextRect)
+      : []
+
+    const isClickSelection = nextRect.width < 2 && nextRect.height < 2
+    const selectedIds = marqueeState.additive
+      ? uniqueIds([...marqueeState.baseSelection, ...nextIds])
+      : nextIds
+
+    setSelectedBlocks(
+      isClickSelection && !marqueeState.additive ? [] : selectedIds,
+      selectedIds[selectedIds.length - 1] ?? null,
+    )
+    setMarqueeRect(null)
+    marqueeStateRef.current = null
+    suppressCanvasClickRef.current = true
   }
 
   const adjustZoom = (delta: number) => {
@@ -225,6 +320,19 @@ export function CanvasViewport() {
     setCam(camX - event.deltaX, camY - event.deltaY, camZoom)
   }
 
+  const getSlidePointer = (clientX: number, clientY: number) => {
+    const slideElement = document.getElementById('slideFrame')
+    if (!slideElement) {
+      return null
+    }
+
+    const rect = slideElement.getBoundingClientRect()
+    return {
+      x: (clientX - rect.left) / camZoom,
+      y: (clientY - rect.top) / camZoom,
+    }
+  }
+
   const handleDrop = (event: DragEvent) => {
     event.preventDefault()
     if (!currentSlideId) {
@@ -249,6 +357,11 @@ export function CanvasViewport() {
   }
 
   const handleCanvasClick = (event: MouseEvent) => {
+    if (suppressCanvasClickRef.current) {
+      suppressCanvasClickRef.current = false
+      return
+    }
+
     const target = event.target as HTMLElement
     if (target.closest('.editor-block') || target.closest('.zoom-toolbar')) {
       return
@@ -278,7 +391,7 @@ export function CanvasViewport() {
           transform: `translate(${camX}px, ${camY}px) scale(${camZoom})`,
         }}
       >
-        <SlideFrame slideId={currentSlideId} interactive />
+        <SlideFrame slideId={currentSlideId} interactive marqueeRect={marqueeRect} />
       </div>
 
       {!isPlayMode && (
@@ -287,7 +400,7 @@ export function CanvasViewport() {
           <span>{Math.round(camZoom * 100)}%</span>
           <button onClick={() => adjustZoom(0.1)}>放大</button>
           <button onClick={() => fitCanvasCenter(false)}>适应屏幕</button>
-          {activeBlockId && <span className="zoom-toolbar__hint">Delete 删除 · Shift + 方向键 快移</span>}
+          {selectedBlockIds.length > 0 && <span className="zoom-toolbar__hint">Delete 删除 · Shift + 方向键 快移</span>}
         </div>
       )}
     </main>

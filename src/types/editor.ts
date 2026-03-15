@@ -97,11 +97,28 @@ export type BlockAnimations = {
 }
 
 export type BlockAppearance = {
-  fill: string
+  // Fill
+  fillType?: 'none' | 'color' | 'gradient'
+  fill: string                   // primary color (also gradient-from)
+  gradientTo?: string            // gradient end color
+  gradientAngle?: number         // gradient angle in degrees (0–360)
+  fillOpacity?: number           // 0–1 fill opacity
+  // Stroke / Border
   stroke: string
   strokeWidth: number
+  strokeStyle?: 'none' | 'solid' | 'dashed' | 'dotted'
+  // Shape
   radius: number
+  // Shadow (detailed Keynote-style)
   shadow: boolean
+  shadowBlur?: number            // blur radius in px (Keynote: 0–100)
+  shadowOffset?: number          // distance in px
+  shadowOpacity?: number         // 0–1
+  shadowAngle?: number           // degrees (0–360)
+  shadowColor?: string           // CSS color
+  // Reflection
+  reflection?: boolean
+  // Typography
   textColor: string
   fontSize: number
   textAlign: TextAlign
@@ -110,12 +127,18 @@ export type BlockAppearance = {
   fontStyle?: string
   textDecoration?: string
   verticalAlign?: 'top' | 'middle' | 'bottom'
+  letterSpacing?: number
+  lineHeight?: number
+  // Transform
+  flipX?: boolean
+  flipY?: boolean
 }
 
 export type EditorBlock = {
   id: string
   name: string
   type: ElementType
+  groupId?: string | null
   x: number
   y: number
   width: number
@@ -125,6 +148,7 @@ export type EditorBlock = {
   opacity: number
   locked: boolean
   hidden: boolean
+  keepRatio?: boolean
   content: string
   appearance: BlockAppearance
   anim: AnimationType

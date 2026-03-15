@@ -1,5 +1,11 @@
 import type { Dispatch, MouseEvent as ReactMouseEvent, RefObject, SetStateAction } from 'react'
 import { useCallback, useEffect, useRef } from 'react'
+import {
+  buildRotationUpdates,
+  getSelectionBounds,
+  getSelectionIdsForBlock,
+  normalizeAngle,
+} from '../../lib/selection'
 import type { EditorBlock as BlockType } from '../../types/editor'
 import { useEditorStore } from '../../store'
 
@@ -12,7 +18,9 @@ type LocalTransform = {
 }
 
 type TransformControlsProps = {
+  block: BlockType
   blockRef: RefObject<HTMLDivElement | null>
+  slideId: string
   localTransform: LocalTransform
   setLocalTransform: Dispatch<SetStateAction<LocalTransform>>
   commitTransform: (updates: Partial<BlockType>) => void
@@ -22,13 +30,17 @@ type TransformControlsProps = {
 type TransformMode = 'none' | 'drag' | 'resize' | 'rotate'
 
 export function TransformControls({
+  block,
   blockRef,
+  slideId,
   localTransform,
   setLocalTransform,
   commitTransform,
   disabled = false,
 }: TransformControlsProps) {
   const camZoom = useEditorStore((state) => state.camZoom)
+  const selectedBlockIds = useEditorStore((state) => state.selectedBlockIds)
+  const updateBlocks = useEditorStore((state) => state.updateBlocks)
   const transformRef = useRef(localTransform)
   const stateRef = useRef({
     mode: 'none' as TransformMode,
@@ -39,6 +51,13 @@ export function TransformControls({
     startH: 0,
     startL: 0,
     startT: 0,
+    linkedBlocks: [] as Array<{ id: string; x: number; y: number }>,
+    rotateBlocks: [] as Array<Pick<BlockType, 'id' | 'x' | 'y' | 'width' | 'height' | 'rotation'>>,
+    rotateCenterX: 0,
+    rotateCenterY: 0,
+    rotateClientCenterX: 0,
+    rotateClientCenterY: 0,
+    rotateStartAngle: 0,
   })
 
   useEffect(() => {
@@ -61,6 +80,19 @@ export function TransformControls({
           x: state.startL + deltaX,
           y: state.startT + deltaY,
         }))
+
+        if (state.linkedBlocks.length > 0) {
+          updateBlocks(
+            slideId,
+            state.linkedBlocks.map((linkedBlock) => ({
+              blockId: linkedBlock.id,
+              updates: {
+                x: linkedBlock.x + deltaX,
+                y: linkedBlock.y + deltaY,
+              },
+            })),
+          )
+        }
         return
       }
 
@@ -96,10 +128,34 @@ export function TransformControls({
       }
 
       if (state.mode === 'rotate' && blockRef.current) {
+        if (state.rotateBlocks.length > 1) {
+          const pointerAngle = (Math.atan2(event.clientY - state.rotateClientCenterY, event.clientX - state.rotateClientCenterX) * 180) / Math.PI
+          const deltaAngle = pointerAngle - state.rotateStartAngle
+          const rotationUpdates = buildRotationUpdates(state.rotateBlocks, deltaAngle, {
+            x: state.rotateCenterX,
+            y: state.rotateCenterY,
+          })
+          const primaryUpdate = rotationUpdates.find((item) => item.blockId === block.id)
+          if (primaryUpdate) {
+            setLocalTransform((prev) => ({
+              ...prev,
+              x: primaryUpdate.updates.x,
+              y: primaryUpdate.updates.y,
+              rotation: primaryUpdate.updates.rotation,
+            }))
+          }
+
+          const linkedUpdates = rotationUpdates.filter((item) => item.blockId !== block.id)
+          if (linkedUpdates.length > 0) {
+            updateBlocks(slideId, linkedUpdates)
+          }
+          return
+        }
+
         const rect = blockRef.current.getBoundingClientRect()
         const centerX = rect.left + rect.width / 2
         const centerY = rect.top + rect.height / 2
-        const angle = (Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180) / Math.PI + 90
+        const angle = normalizeAngle((Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180) / Math.PI + 90)
         setLocalTransform((prev) => ({
           ...prev,
           rotation: angle,
@@ -129,7 +185,7 @@ export function TransformControls({
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [blockRef, camZoom, commitTransform, disabled, setLocalTransform])
+  }, [block.id, blockRef, camZoom, commitTransform, disabled, setLocalTransform, slideId, updateBlocks])
 
   const initTransform = useCallback(
     (
@@ -146,6 +202,55 @@ export function TransformControls({
       if (stopPropagation) {
         event.stopPropagation()
       }
+
+      const editorState = useEditorStore.getState()
+      const currentSlide = editorState.slides.find((slide) => slide.id === slideId)
+      const dragIds = mode !== 'drag' || !currentSlide
+        ? []
+        : (
+          selectedBlockIds.includes(block.id) && selectedBlockIds.length > 1
+            ? selectedBlockIds
+            : getSelectionIdsForBlock(currentSlide.blocks, block.id)
+        )
+      const selectionIds = !currentSlide
+        ? []
+        : (
+          selectedBlockIds.includes(block.id) && selectedBlockIds.length > 1
+            ? selectedBlockIds
+            : getSelectionIdsForBlock(currentSlide.blocks, block.id)
+        )
+      const linkedBlocks = currentSlide
+        ? currentSlide.blocks
+            .filter((item) => dragIds.includes(item.id) && item.id !== block.id && !item.locked)
+            .map((item) => ({ id: item.id, x: item.x, y: item.y }))
+        : []
+      const selectionBounds = currentSlide ? getSelectionBounds(currentSlide.blocks, selectionIds) : null
+      const rotateBlocks = mode !== 'rotate' || !currentSlide
+        ? []
+        : currentSlide.blocks
+            .filter((item) => selectionIds.includes(item.id) && !item.locked)
+            .map((item) => ({
+              id: item.id,
+              x: item.x,
+              y: item.y,
+              width: item.width,
+              height: item.height,
+              rotation: item.rotation,
+            }))
+      const rotateElements = mode !== 'rotate'
+        ? []
+        : Array.from(document.getElementById('slideContent')?.querySelectorAll<HTMLElement>('.editor-block') ?? [])
+            .filter((element) => selectionIds.includes(element.dataset.blockId ?? ''))
+      const primaryRect = blockRef.current?.getBoundingClientRect() ?? null
+      const rotateClientBounds = rotateElements.length === 0
+        ? null
+        : {
+            left: Math.min(...rotateElements.map((element) => element.getBoundingClientRect().left)),
+            top: Math.min(...rotateElements.map((element) => element.getBoundingClientRect().top)),
+            right: Math.max(...rotateElements.map((element) => element.getBoundingClientRect().right)),
+            bottom: Math.max(...rotateElements.map((element) => element.getBoundingClientRect().bottom)),
+          }
+
       stateRef.current = {
         mode,
         dir,
@@ -155,9 +260,39 @@ export function TransformControls({
         startH: transformRef.current.height,
         startL: transformRef.current.x,
         startT: transformRef.current.y,
+        linkedBlocks,
+        rotateBlocks,
+        rotateCenterX: selectionBounds ? selectionBounds.x + selectionBounds.width / 2 : transformRef.current.x + transformRef.current.width / 2,
+        rotateCenterY: selectionBounds ? selectionBounds.y + selectionBounds.height / 2 : transformRef.current.y + transformRef.current.height / 2,
+        rotateClientCenterX: rotateClientBounds
+          ? (rotateClientBounds.left + rotateClientBounds.right) / 2
+          : primaryRect
+          ? primaryRect.left + primaryRect.width / 2
+          : event.clientX,
+        rotateClientCenterY: rotateClientBounds
+          ? (rotateClientBounds.top + rotateClientBounds.bottom) / 2
+          : primaryRect
+          ? primaryRect.top + primaryRect.height / 2
+          : event.clientY,
+        rotateStartAngle: (Math.atan2(
+          event.clientY - (
+            rotateClientBounds
+              ? (rotateClientBounds.top + rotateClientBounds.bottom) / 2
+              : primaryRect
+              ? primaryRect.top + primaryRect.height / 2
+              : event.clientY
+          ),
+          event.clientX - (
+            rotateClientBounds
+              ? (rotateClientBounds.left + rotateClientBounds.right) / 2
+              : primaryRect
+              ? primaryRect.left + primaryRect.width / 2
+              : event.clientX
+          ),
+        ) * 180) / Math.PI,
       }
     },
-    [blockRef, disabled],
+    [block.id, blockRef, disabled, selectedBlockIds, slideId],
   )
 
   useEffect(() => {

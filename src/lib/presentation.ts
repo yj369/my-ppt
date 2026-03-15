@@ -79,11 +79,31 @@ export const INSERT_OPTIONS: Array<{ id: ElementType; label: string; category: s
 ]
 
 const baseAppearance = (textColor = '#f7f7fb'): BlockAppearance => ({
+  fillType: 'color',
   fill: 'rgba(255, 255, 255, 0.08)',
   stroke: 'rgba(255, 255, 255, 0.14)',
   strokeWidth: 1,
+  strokeStyle: 'solid',
   radius: 24,
   shadow: true,
+  textColor,
+  fontSize: 28,
+  textAlign: 'left',
+  fontFamily: 'Helvetica Neue',
+  fontWeight: 'normal',
+  fontStyle: 'normal',
+  textDecoration: 'none',
+  verticalAlign: 'top',
+})
+
+const baseTextAppearance = (textColor = '#f8fafc'): BlockAppearance => ({
+  fillType: 'none',
+  fill: 'transparent',
+  stroke: 'transparent',
+  strokeWidth: 0,
+  strokeStyle: 'none',
+  radius: 0,
+  shadow: false,
   textColor,
   fontSize: 28,
   textAlign: 'left',
@@ -130,6 +150,7 @@ export function cloneBlock(block: EditorBlock, offset = 28): EditorBlock {
   return normalizeBlockAnimations({
     ...block,
     id: uuidv4(),
+    groupId: null,
     name: `${block.name} 副本`,
     x: block.x + offset,
     y: block.y + offset,
@@ -171,7 +192,7 @@ export function createBlockPreset(type: ElementType, overrides: BlockOverrides =
     ...overrides.appearance,
   }
 
-  return normalizeBlockAnimations({
+  return normalizeBlockAnimations(normalizeBlockAppearance({
     ...preset,
     ...overrides,
     appearance,
@@ -183,7 +204,7 @@ export function createBlockPreset(type: ElementType, overrides: BlockOverrides =
       duration: overrides.duration ?? preset.duration,
       delay: overrides.delay ?? preset.delay,
     }),
-  })
+  }))
 }
 
 function getPresetByType(type: ElementType): EditorBlock {
@@ -225,7 +246,13 @@ function getPresetByType(type: ElementType): EditorBlock {
         hidden: false,
         content:
           '<h1 class="kn-heading" contenteditable="true">把当前原型升级为更像 Keynote 的演示编辑器</h1>',
-        appearance: baseAppearance('#ffffff'),
+        appearance: {
+          ...baseTextAppearance('#ffffff'),
+          fontSize: 54,
+          fontWeight: '700',
+          lineHeight: 1.08,
+          letterSpacing: -2,
+        },
         anim: 'fade-up',
         trigger: 'onClick',
         duration: 0.8,
@@ -248,8 +275,10 @@ function getPresetByType(type: ElementType): EditorBlock {
         content:
           '<h2 class="kn-subheading" contenteditable="true">支持主题、页面布局、转场和构件动画</h2>',
         appearance: {
-          ...baseAppearance('rgba(255,255,255,0.92)'),
-          fontSize: 30,
+          ...baseTextAppearance('rgba(248, 250, 252, 0.72)'),
+          fontSize: 24,
+          fontWeight: '500',
+          lineHeight: 1.28,
         },
         anim: 'fade-left',
         trigger: 'afterPrev',
@@ -273,8 +302,9 @@ function getPresetByType(type: ElementType): EditorBlock {
         content:
           '<p class="kn-body" contenteditable="true">你可以双击任意文本直接编辑，使用右侧检视器修改颜色、阴影、圆角、层级与动画节奏。</p>',
         appearance: {
-          ...baseAppearance('rgba(247,247,251,0.82)'),
-          fontSize: 20,
+          ...baseTextAppearance('rgba(248, 250, 252, 0.72)'),
+          fontSize: 18,
+          lineHeight: 1.45,
         },
         anim: 'fade-up',
         trigger: 'withPrev',
@@ -856,9 +886,67 @@ export function createDemoPresentation(): PresentationSnapshot {
   }
 }
 
+function normalizeBlockAppearance(block: EditorBlock): EditorBlock {
+  if (!['heading', 'subheading', 'body'].includes(block.type)) {
+    return {
+      ...block,
+      appearance: {
+        ...block.appearance,
+        fillType: block.appearance.fillType ?? (block.appearance.fill.startsWith('linear-gradient') ? 'gradient' : 'color'),
+        strokeStyle: block.appearance.strokeStyle ?? (block.appearance.strokeWidth > 0 ? 'solid' : 'none'),
+      },
+    }
+  }
+
+  const appearance = { ...block.appearance }
+  const isLegacyTextBlock = appearance.fillType === undefined
+  const normalized: BlockAppearance = {
+    ...appearance,
+    fillType: isLegacyTextBlock ? 'none' : appearance.fillType ?? 'none',
+    fill: isLegacyTextBlock ? 'transparent' : appearance.fill,
+    strokeStyle: isLegacyTextBlock ? 'none' : appearance.strokeStyle ?? 'none',
+    stroke: isLegacyTextBlock ? 'transparent' : appearance.stroke,
+    strokeWidth: isLegacyTextBlock ? 0 : appearance.strokeWidth,
+    radius: isLegacyTextBlock ? 0 : appearance.radius,
+    shadow: isLegacyTextBlock ? false : appearance.shadow,
+  }
+
+  if (block.type === 'heading') {
+    if (appearance.fontSize === 28) normalized.fontSize = 54
+    if (appearance.fontWeight === 'normal') normalized.fontWeight = '700'
+    if (appearance.lineHeight == null) normalized.lineHeight = 1.08
+    if (appearance.letterSpacing == null) normalized.letterSpacing = -2
+  }
+
+  if (block.type === 'subheading') {
+    if (appearance.fontSize === 30) normalized.fontSize = 24
+    if (appearance.fontWeight === 'normal') normalized.fontWeight = '500'
+    if (appearance.lineHeight == null) normalized.lineHeight = 1.28
+    if (appearance.textColor === 'rgba(255,255,255,0.92)') {
+      normalized.textColor = 'rgba(248, 250, 252, 0.72)'
+    }
+  }
+
+  if (block.type === 'body') {
+    if (appearance.fontSize === 20) normalized.fontSize = 18
+    if (appearance.lineHeight == null) normalized.lineHeight = 1.45
+    if (appearance.textColor === 'rgba(247,247,251,0.82)') {
+      normalized.textColor = 'rgba(248, 250, 252, 0.72)'
+    }
+  }
+
+  return {
+    ...block,
+    appearance: normalized,
+  }
+}
+
 export function normalizePresentationSnapshot(snapshot: PresentationSnapshot): PresentationSnapshot {
   return {
     ...snapshot,
-    slides: snapshot.slides.map((slide) => normalizeSlideAnimations(slide)),
+    slides: snapshot.slides.map((slide) => normalizeSlideAnimations({
+      ...slide,
+      blocks: slide.blocks.map((block) => normalizeBlockAppearance(block)),
+    })),
   }
 }

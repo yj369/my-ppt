@@ -1,10 +1,12 @@
 import { create } from 'zustand'
+import { v4 as uuidv4 } from 'uuid'
 import {
   moveSlideBlockAnimation,
   normalizeBlockAnimations,
   normalizeSlideAnimations,
   updateSlideBlockAnimation,
 } from '../lib/animations'
+import { uniqueIds } from '../lib/selection'
 import {
   cloneBlock,
   cloneSlide,
@@ -33,12 +35,18 @@ type BlockUpdate = Partial<Omit<EditorBlock, 'appearance'>> & {
   appearance?: Partial<BlockAppearance>
 }
 
+type BlockUpdateBatch = Array<{
+  blockId: string
+  updates: BlockUpdate
+}>
+
 export type EditorState = {
   presentationName: string
   theme: PresentationTheme
   slides: Slide[]
   currentSlideId: string | null
   activeBlockId: string | null
+  selectedBlockIds: string[]
   activeInspector: InspectorTab
   isPlayMode: boolean
   navigationDirection: -1 | 0 | 1
@@ -66,6 +74,7 @@ export type EditorState = {
   insertBlock: (type: ElementType, position?: { x: number; y: number }) => void
   addBlock: (slideId: string, block: EditorBlock) => void
   updateBlock: (slideId: string, blockId: string, updates: BlockUpdate) => void
+  updateBlocks: (slideId: string, updates: BlockUpdateBatch) => void
   updateBlockAnimation: (
     slideId: string,
     blockId: string,
@@ -82,9 +91,19 @@ export type EditorState = {
   moveBlockAnimation: (slideId: string, blockId: string, phase: AnimationPhase, direction: -1 | 1) => void
   duplicateBlock: (slideId: string, blockId: string) => void
   deleteBlock: (slideId: string, blockId: string) => void
+  deleteBlocks: (slideId: string, blockIds: string[]) => void
+  bringBlockToFront: (slideId: string, blockId: string) => void
+  sendBlockToBack: (slideId: string, blockId: string) => void
   bringBlockForward: (slideId: string, blockId: string) => void
   sendBlockBackward: (slideId: string, blockId: string) => void
+  alignBlock: (slideId: string, blockId: string, mode: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void
+  moveBlocksBy: (slideId: string, blockIds: string[], deltaX: number, deltaY: number) => void
+  groupBlocks: (slideId: string, blockIds: string[]) => void
+  ungroupBlocks: (slideId: string, blockIds: string[]) => void
   setActiveBlock: (id: string | null) => void
+  setPrimarySelectedBlock: (id: string) => void
+  setSelectedBlocks: (ids: string[], activeId?: string | null) => void
+  toggleBlockSelection: (id: string) => void
   setActiveInspector: (tab: InspectorTab) => void
   togglePlayMode: (force?: boolean) => void
   nextSlide: () => void
@@ -97,6 +116,43 @@ function reorder<T>(items: T[], fromIndex: number, toIndex: number) {
   const [item] = next.splice(fromIndex, 1)
   next.splice(toIndex, 0, item)
   return next
+}
+
+function applyBlockUpdate(block: EditorBlock, updates: BlockUpdate) {
+  const next = {
+    ...block,
+    ...updates,
+    appearance: updates.appearance
+      ? { ...block.appearance, ...updates.appearance }
+      : block.appearance,
+  }
+
+  if (block.keepRatio) {
+    if (updates.width !== undefined && updates.height === undefined) {
+      const ratio = block.width / block.height
+      next.height = updates.width / ratio
+    } else if (updates.height !== undefined && updates.width === undefined) {
+      const ratio = block.width / block.height
+      next.width = updates.height * ratio
+    }
+  }
+
+  return next
+}
+
+function buildSelectionState(ids: string[], activeId?: string | null) {
+  const selectedBlockIds = uniqueIds(ids)
+  const nextActiveId = selectedBlockIds.length === 0
+    ? null
+    : activeId && selectedBlockIds.includes(activeId)
+    ? activeId
+    : selectedBlockIds[selectedBlockIds.length - 1]
+
+  return {
+    selectedBlockIds,
+    activeBlockId: nextActiveId,
+    activeInspector: nextActiveId ? ('format' as const) : ('document' as const),
+  }
 }
 
 function getSnapshot(state: EditorState): PresentationSnapshot {
@@ -140,6 +196,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   slides: initialSnapshot.slides,
   currentSlideId: initialSnapshot.currentSlideId,
   activeBlockId: null,
+  selectedBlockIds: [],
   activeInspector: 'format',
   isPlayMode: false,
   navigationDirection: 0,
@@ -162,6 +219,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         slides,
         currentSlideId: newSlide.id,
         activeBlockId: null,
+        selectedBlockIds: [],
         navigationDirection: 1 as const,
       }
     }),
@@ -180,6 +238,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         slides,
         currentSlideId: duplicated.id,
         activeBlockId: null,
+        selectedBlockIds: [],
         navigationDirection: 1 as const,
       }
     }),
@@ -201,6 +260,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         currentSlideId:
           state.currentSlideId === id ? slides[fallbackIndex]?.id ?? slides[0]?.id ?? null : state.currentSlideId,
         activeBlockId: null,
+        selectedBlockIds: [],
       }
     }),
   moveSlide: (id, direction) =>
@@ -229,6 +289,7 @@ export const useEditorStore = create<EditorState>((set) => ({
     set(() => ({
       currentSlideId: id,
       activeBlockId: null,
+      selectedBlockIds: [],
       navigationDirection: direction,
     })),
   updateSlide: (id, updates) =>
@@ -259,6 +320,7 @@ export const useEditorStore = create<EditorState>((set) => ({
             : slide,
         ),
         activeBlockId: null,
+        selectedBlockIds: [],
         activeInspector: 'document' as const,
       }
     }),
@@ -283,6 +345,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         slides: normalized.slides,
         currentSlideId: normalized.currentSlideId ?? normalized.slides[0]?.id ?? null,
         activeBlockId: null,
+        selectedBlockIds: [],
         activeInspector: 'document',
         isPlayMode: false,
         navigationDirection: 0,
@@ -298,6 +361,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       slides: demo.slides,
       currentSlideId: demo.currentSlideId,
       activeBlockId: null,
+      selectedBlockIds: [],
       activeInspector: 'document',
       isPlayMode: false,
       navigationDirection: 0,
@@ -324,6 +388,7 @@ export const useEditorStore = create<EditorState>((set) => ({
             : slide,
         ),
         activeBlockId: newBlock.id,
+        selectedBlockIds: [newBlock.id],
         activeInspector: 'format' as const,
       }
     }),
@@ -350,21 +415,30 @@ export const useEditorStore = create<EditorState>((set) => ({
         slide.id === slideId
           ? {
               ...slide,
-              blocks: slide.blocks.map((block) =>
-                block.id === blockId
-                  ? {
-                      ...block,
-                      ...updates,
-                      appearance: updates.appearance
-                        ? { ...block.appearance, ...updates.appearance }
-                        : block.appearance,
-                    }
-                  : block,
-              ),
+              blocks: slide.blocks.map((block) => (
+                block.id === blockId ? applyBlockUpdate(block, updates) : block
+              )),
             }
           : slide,
       ),
     })),
+  updateBlocks: (slideId, updates) =>
+    set((state) => {
+      const updatesById = new Map(updates.map((entry) => [entry.blockId, entry.updates]))
+      return {
+        slides: state.slides.map((slide) =>
+          slide.id === slideId
+            ? {
+                ...slide,
+                blocks: slide.blocks.map((block) => {
+                  const nextUpdates = updatesById.get(block.id)
+                  return nextUpdates ? applyBlockUpdate(block, nextUpdates) : block
+                }),
+              }
+            : slide,
+        ),
+      }
+    }),
   updateBlockAnimation: (slideId, blockId, phase, updates) =>
     set((state) => ({
       slides: state.slides.map((slide) =>
@@ -404,63 +478,223 @@ export const useEditorStore = create<EditorState>((set) => ({
             blocks: [...slide.blocks, { ...duplicated, zIndex: getNextZIndex(slide.blocks) }],
           })
         }),
-        activeBlockId: duplicatedId ?? state.activeBlockId,
+        ...buildSelectionState(duplicatedId ? [duplicatedId] : state.selectedBlockIds, duplicatedId ?? state.activeBlockId),
       }
     }),
   deleteBlock: (slideId, blockId) =>
-    set((state) => ({
-      slides: state.slides.map((slide) =>
-        slide.id === slideId
-          ? normalizeSlideAnimations({
-              ...slide,
-              blocks: slide.blocks.filter((block) => block.id !== blockId),
-            })
-          : slide,
-      ),
-      activeBlockId: state.activeBlockId === blockId ? null : state.activeBlockId,
-    })),
-  bringBlockForward: (slideId, blockId) =>
+    set((state) => {
+      const nextSelectedIds = state.selectedBlockIds.filter((id) => id !== blockId)
+      return {
+        slides: state.slides.map((slide) =>
+          slide.id === slideId
+            ? normalizeSlideAnimations({
+                ...slide,
+                blocks: slide.blocks.filter((block) => block.id !== blockId),
+              })
+            : slide,
+        ),
+        ...buildSelectionState(nextSelectedIds, state.activeBlockId === blockId ? null : state.activeBlockId),
+      }
+    }),
+  deleteBlocks: (slideId, blockIds) =>
+    set((state) => {
+      const blockIdSet = new Set(blockIds)
+      const nextSelectedIds = state.selectedBlockIds.filter((id) => !blockIdSet.has(id))
+      return {
+        slides: state.slides.map((slide) =>
+          slide.id === slideId
+            ? normalizeSlideAnimations({
+                ...slide,
+                blocks: slide.blocks.filter((block) => !blockIdSet.has(block.id)),
+              })
+            : slide,
+        ),
+        ...buildSelectionState(
+          nextSelectedIds,
+          state.activeBlockId && blockIdSet.has(state.activeBlockId) ? null : state.activeBlockId,
+        ),
+      }
+    }),
+  bringBlockForward: (slideId: string, blockId: string) =>
     set((state) => ({
       slides: state.slides.map((slide) => {
-        if (slide.id !== slideId) {
-          return slide
-        }
-
-        const top = getNextZIndex(slide.blocks)
+        if (slide.id !== slideId) return slide
+        const sorted = [...slide.blocks].sort((a, b) => a.zIndex - b.zIndex)
+        const idx = sorted.findIndex((b) => b.id === blockId)
+        if (idx < 0 || idx === sorted.length - 1) return slide
+        const next = sorted[idx + 1]
+        const current = sorted[idx]
+        const currentZ = current.zIndex
+        const nextZ = next.zIndex
         return {
           ...slide,
-          blocks: slide.blocks.map((block) =>
-            block.id === blockId ? { ...block, zIndex: top } : block,
-          ),
+          blocks: slide.blocks.map((b) => {
+            if (b.id === blockId) return { ...b, zIndex: nextZ }
+            if (b.id === next.id) return { ...b, zIndex: currentZ }
+            return b
+          }),
         }
       }),
     })),
-  sendBlockBackward: (slideId, blockId) =>
+  sendBlockBackward: (slideId: string, blockId: string) =>
     set((state) => ({
       slides: state.slides.map((slide) => {
-        if (slide.id !== slideId) {
-          return slide
-        }
-
-        const min = slide.blocks.reduce((value, block) => Math.min(value, block.zIndex), 1)
+        if (slide.id !== slideId) return slide
+        const sorted = [...slide.blocks].sort((a, b) => a.zIndex - b.zIndex)
+        const idx = sorted.findIndex((b) => b.id === blockId)
+        if (idx <= 0) return slide
+        const prev = sorted[idx - 1]
+        const current = sorted[idx]
+        const currentZ = current.zIndex
+        const prevZ = prev.zIndex
         return {
           ...slide,
-          blocks: slide.blocks.map((block) =>
-            block.id === blockId ? { ...block, zIndex: min - 1 } : block,
-          ),
+          blocks: slide.blocks.map((b) => {
+            if (b.id === blockId) return { ...b, zIndex: prevZ }
+            if (b.id === prev.id) return { ...b, zIndex: currentZ }
+            return b
+          }),
         }
       }),
     })),
+  bringBlockToFront: (slideId: string, blockId: string) =>
+    set((state) => ({
+      slides: state.slides.map((slide) => {
+        if (slide.id !== slideId) return slide
+        const maxZ = Math.max(...slide.blocks.map((b) => b.zIndex), 0)
+        return {
+          ...slide,
+          blocks: slide.blocks.map((b) => (b.id === blockId ? { ...b, zIndex: maxZ + 1 } : b)),
+        }
+      }),
+    })),
+  sendBlockToBack: (slideId: string, blockId: string) =>
+    set((state) => ({
+      slides: state.slides.map((slide) => {
+        if (slide.id !== slideId) return slide
+        const minZ = Math.min(...slide.blocks.map((b) => b.zIndex), 0)
+        return {
+          ...slide,
+          blocks: slide.blocks.map((b) => (b.id === blockId ? { ...b, zIndex: minZ - 1 } : b)),
+        }
+      }),
+    })),
+  alignBlock: (slideId, blockId, mode) =>
+    set((state) => ({
+      slides: state.slides.map((slide) => {
+        if (slide.id !== slideId) return slide
+        return {
+          ...slide,
+          blocks: slide.blocks.map((block) => {
+            if (block.id !== blockId) return block
+            const SLIDE_W = 1280
+            const SLIDE_H = 720
+            switch (mode) {
+              case 'left': return { ...block, x: 0 }
+              case 'center': return { ...block, x: Math.round(SLIDE_W / 2 - block.width / 2) }
+              case 'right': return { ...block, x: Math.round(SLIDE_W - block.width) }
+              case 'top': return { ...block, y: 0 }
+              case 'middle': return { ...block, y: Math.round(SLIDE_H / 2 - block.height / 2) }
+              case 'bottom': return { ...block, y: Math.round(SLIDE_H - block.height) }
+              default: return block
+            }
+          }),
+        }
+      }),
+    })),
+  moveBlocksBy: (slideId, blockIds, deltaX, deltaY) =>
+    set((state) => {
+      const blockIdSet = new Set(blockIds)
+      return {
+        slides: state.slides.map((slide) => {
+          if (slide.id !== slideId) return slide
+          return {
+            ...slide,
+            blocks: slide.blocks.map((block) => {
+              if (!blockIdSet.has(block.id) || block.locked) return block
+              return {
+                ...block,
+                x: block.x + deltaX,
+                y: block.y + deltaY,
+              }
+            }),
+          }
+        }),
+      }
+    }),
+  groupBlocks: (slideId, blockIds) =>
+    set((state) => {
+      const selectedIds = uniqueIds(blockIds)
+      if (selectedIds.length < 2) return state
+      const blockIdSet = new Set(selectedIds)
+      const groupId = uuidv4()
+      return {
+        slides: state.slides.map((slide) => {
+          if (slide.id !== slideId) return slide
+          return {
+            ...slide,
+            blocks: slide.blocks.map((block) => (
+              blockIdSet.has(block.id)
+                ? { ...block, groupId }
+                : block
+            )),
+          }
+        }),
+      }
+    }),
+  ungroupBlocks: (slideId, blockIds) =>
+    set((state) => {
+      const targetIds = uniqueIds(blockIds)
+      if (targetIds.length === 0) return state
+      const blockIdSet = new Set(targetIds)
+      return {
+        slides: state.slides.map((slide) => {
+          if (slide.id !== slideId) return slide
+          const targetGroupIds = new Set(
+            slide.blocks
+              .filter((block) => blockIdSet.has(block.id) && block.groupId)
+              .map((block) => block.groupId as string),
+          )
+          return {
+            ...slide,
+            blocks: slide.blocks.map((block) => (
+              block.groupId && targetGroupIds.has(block.groupId)
+                ? { ...block, groupId: null }
+                : block
+            )),
+          }
+        }),
+      }
+    }),
   setActiveBlock: (id) =>
-    set(() => ({
-      activeBlockId: id,
-      activeInspector: id ? 'format' : 'document',
+    set(() => buildSelectionState(id ? [id] : [], id)),
+  setPrimarySelectedBlock: (id) =>
+    set((state) => ({
+      ...buildSelectionState(
+        state.selectedBlockIds.includes(id) ? state.selectedBlockIds : [id],
+        id,
+      ),
     })),
+  setSelectedBlocks: (ids, activeId) =>
+    set(() => buildSelectionState(ids, activeId)),
+  toggleBlockSelection: (id) =>
+    set((state) => {
+      if (state.selectedBlockIds.includes(id)) {
+        const nextSelectedIds = state.selectedBlockIds.filter((item) => item !== id)
+        return buildSelectionState(
+          nextSelectedIds,
+          state.activeBlockId === id ? null : state.activeBlockId,
+        )
+      }
+
+      return buildSelectionState([...state.selectedBlockIds, id], id)
+    }),
   setActiveInspector: (tab) => set(() => ({ activeInspector: tab })),
   togglePlayMode: (force) =>
     set((state) => ({
       isPlayMode: typeof force === 'boolean' ? force : !state.isPlayMode,
       activeBlockId: null,
+      selectedBlockIds: [],
       navigationDirection: 0,
     })),
   nextSlide: () =>
@@ -477,6 +711,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       return {
         currentSlideId: state.slides[nextIndex].id,
         activeBlockId: null,
+        selectedBlockIds: [],
         navigationDirection: 1 as const,
       }
     }),
@@ -498,6 +733,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       return {
         currentSlideId: previousId,
         activeBlockId: null,
+        selectedBlockIds: [],
         navigationDirection: -1 as const,
       }
     }),

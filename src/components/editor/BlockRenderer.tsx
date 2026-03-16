@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { parseCssColor } from '../../lib/colors'
 import type { EditorBlock } from '../../types/editor'
 import { TipTapEditor } from './TipTapEditor'
+import * as LucideIcons from 'lucide-react'
 
 type BlockRendererProps = {
   block: EditorBlock
@@ -185,6 +186,62 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
     '--block-text-decoration': appearance.textDecoration ?? 'none',
     '--block-text-font-family': appearance.fontFamily ?? 'inherit',
   }
+
+  if (block.type === 'icon') {
+    const iconName = block.content || 'Star'
+    const IconComp = (LucideIcons as unknown as Record<string, React.FC<{ size?: number; color?: string; strokeWidth?: number; style?: CSSProperties }>>)[iconName]
+    const iconSize = Math.min(block.width, block.height) * 0.7
+    const gradId = `icg-${block.id}`
+    const isGrad = !!appearance.textColor?.startsWith('linear-gradient')
+
+    // Parse gradient stops and angle for SVG linearGradient
+    let svgStops: { color: string; offset: string }[] = []
+    let svgX1 = '0', svgY1 = '0', svgX2 = '1', svgY2 = '0'
+    if (isGrad && appearance.textColor) {
+      const degMatch = appearance.textColor.match(/linear-gradient\(\s*([\d.]+)deg/)
+      const deg = degMatch ? parseFloat(degMatch[1]) : 90
+      const rad = (deg - 90) * Math.PI / 180
+      svgX1 = (0.5 + Math.cos(rad + Math.PI) / 2).toFixed(3)
+      svgY1 = (0.5 + Math.sin(rad + Math.PI) / 2).toFixed(3)
+      svgX2 = (0.5 + Math.cos(rad) / 2).toFixed(3)
+      svgY2 = (0.5 + Math.sin(rad) / 2).toFixed(3)
+      const colorMatches = [...appearance.textColor.matchAll(/(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))\s*([\d.]+%)?/g)]
+      svgStops = colorMatches.map((m, i) => ({
+        color: m[1],
+        offset: m[2] ?? (i === 0 ? '0%' : '100%'),
+      }))
+    }
+
+    const solidColor = isGrad ? undefined : (appearance.textColor || '#ffffff')
+
+    return (
+      <div
+        className="tpl-wrapper tpl-wrapper--icon"
+        style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        {isGrad && (
+          <svg width={0} height={0} style={{ position: 'absolute', pointerEvents: 'none', overflow: 'visible' }}>
+            <defs>
+              <linearGradient id={gradId} x1={svgX1} y1={svgY1} x2={svgX2} y2={svgY2}>
+                {svgStops.map((s, i) => <stop key={i} offset={s.offset} stopColor={s.color} />)}
+              </linearGradient>
+            </defs>
+          </svg>
+        )}
+        {IconComp ? (
+          <IconComp
+            size={iconSize}
+            color={solidColor}
+            strokeWidth={1.5}
+            style={isGrad ? { stroke: `url(#${gradId})`, color: `url(#${gradId})` } : undefined}
+          />
+        ) : (
+          <span style={{ color: solidColor ?? '#fff', fontSize: '14px', opacity: 0.5 }}>?</span>
+        )}
+      </div>
+    )
+  }
+
 
   return (
     <div

@@ -14,10 +14,12 @@ import {
   Triangle,
   Link as LinkIcon,
   Image as ImageIcon,
+  Smile,
 } from 'lucide-react'
 import { exportPresentationSnapshot, useEditorStore } from '../../store'
 import type { PresentationSnapshot } from '../../types/editor'
 import { saveLocalImage, getImageDimensions, calculateFitDimensions } from '../../lib/imageStorage'
+import { IconPicker } from './IconPicker'
 
 export function Toolbar() {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -30,6 +32,9 @@ export function Toolbar() {
   const imageMenuRef = useRef<HTMLDivElement>(null)
   const [imageTab, setImageTab] = useState<'local' | 'online'>('local')
   const [imageUrl, setImageUrl] = useState('')
+
+  const [isIconMenuOpen, setIconMenuOpen] = useState(false)
+  const iconMenuRef = useRef<HTMLDivElement>(null)
 
   const {
     presentationName,
@@ -82,15 +87,18 @@ export function Toolbar() {
       if (isImageMenuOpen && imageMenuRef.current && !imageMenuRef.current.contains(target)) {
         setImageMenuOpen(false)
       }
+      if (isIconMenuOpen && iconMenuRef.current && !iconMenuRef.current.contains(target)) {
+        setIconMenuOpen(false)
+      }
     }
 
-    if (isShapeMenuOpen || isImageMenuOpen) {
+    if (isShapeMenuOpen || isImageMenuOpen || isIconMenuOpen) {
       document.addEventListener('mousedown', handleOutsideClick)
     }
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick)
     }
-  }, [isShapeMenuOpen, isImageMenuOpen])
+  }, [isShapeMenuOpen, isImageMenuOpen, isIconMenuOpen])
 
   const insertShapePreset = (type: any) => {
     insertBlock(type)
@@ -181,7 +189,7 @@ export function Toolbar() {
             className={`toolbar-pill ${isShapeMenuOpen ? 'toolbar-pill--active' : ''}`}
             onClick={() => {
               setShapeMenuOpen(!isShapeMenuOpen)
-              if (!isShapeMenuOpen) setImageMenuOpen(false)
+              if (!isShapeMenuOpen) { setImageMenuOpen(false); setIconMenuOpen(false) }
             }}
           >
             <Shapes size={16} />
@@ -254,7 +262,7 @@ export function Toolbar() {
             className={`toolbar-pill ${isImageMenuOpen ? 'toolbar-pill--active' : ''}`} 
             onClick={() => {
               setImageMenuOpen(!isImageMenuOpen)
-              if (!isImageMenuOpen) setShapeMenuOpen(false)
+              if (!isImageMenuOpen) { setShapeMenuOpen(false); setIconMenuOpen(false) }
             }}
           >
             <FileImage size={16} />
@@ -392,6 +400,31 @@ export function Toolbar() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Icon Picker Menu */}
+        <div style={{ position: 'relative' }} ref={iconMenuRef}>
+          <button
+            className={`toolbar-pill ${isIconMenuOpen ? 'toolbar-pill--active' : ''}`}
+            onClick={() => {
+              setIconMenuOpen(!isIconMenuOpen)
+              if (!isIconMenuOpen) { setShapeMenuOpen(false); setImageMenuOpen(false) }
+            }}
+          >
+            <Smile size={16} />
+            <span>图标</span>
+          </button>
+
+          {isIconMenuOpen && (
+            <div className="toolbar-shape-popover" style={{ padding: 0, overflow: 'hidden' }}>
+              <IconPicker
+                onSelect={(iconName) => {
+                  insertBlock('icon', { content: iconName })
+                  setIconMenuOpen(false)
+                }}
+              />
             </div>
           )}
         </div>

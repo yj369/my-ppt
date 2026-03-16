@@ -44,6 +44,7 @@ export type ElementType =
   | 'shape-callout-rect'
   | 'divider'
   | '3d'
+  | 'icon'
 
 export type AnimationType =
   | 'none'

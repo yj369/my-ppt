@@ -957,6 +957,35 @@ function getPresetByType(type: ElementType, overrides?: BlockOverrides): EditorB
         duration: 0.9,
         delay: 0,
       }
+    case 'icon':
+      return {
+        id: uuidv4(),
+        name: '图标',
+        type,
+        x: 280,
+        y: 200,
+        width: 160,
+        height: 160,
+        zIndex: 15,
+        rotation: 0,
+        opacity: 1,
+        locked: false,
+        hidden: false,
+        content: overrides?.content ?? 'Star',
+        appearance: {
+          ...baseAppearance('#ffffff'),
+          fill: 'transparent',
+          stroke: 'transparent',
+          shadow: false,
+          radius: 0,
+          textAlign: 'center',
+          verticalAlign: 'middle',
+        },
+        anim: 'pop',
+        trigger: 'onClick',
+        duration: 0.7,
+        delay: 0,
+      }
   }
 }
 

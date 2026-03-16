@@ -153,6 +153,207 @@ export function buildMoveSelectionUpdates(blocks: EditorBlock[], blockIds: strin
   }))
 }
 
+export type SnapResult = {
+  x: number
+  y: number
+  width: number
+  height: number
+  guides: Array<{ type: 'v' | 'h'; pos: number }>
+  spacingGuides?: Array<{ type: 'v' | 'h'; start: number; end: number; pos: number }> // New for equal spacing
+}
+
+export function calculateSnap(
+  currentRect: SelectionRect,
+  otherBlocks: EditorBlock[],
+  options: {
+    gridSize?: number
+    snapThreshold?: number
+    slideWidth: number
+    slideHeight: number
+    resizeDir?: string
+  }
+): SnapResult {
+  const { gridSize, snapThreshold = 5, slideWidth, slideHeight, resizeDir } = options
+  const result: SnapResult = {
+    ...currentRect,
+    guides: [],
+    spacingGuides: [],
+  }
+
+  const isResizing = !!resizeDir
+
+  // 1. Size Snapping (During resize only)
+  if (isResizing) {
+    otherBlocks.forEach(block => {
+      // Snap width
+      if (resizeDir?.includes('e') || resizeDir?.includes('w')) {
+        if (Math.abs(currentRect.width - block.width) < snapThreshold) {
+          result.width = block.width
+          if (resizeDir.includes('w')) {
+            result.x = currentRect.x + (currentRect.width - block.width)
+          }
+        }
+      }
+      // Snap height
+      if (resizeDir?.includes('n') || resizeDir?.includes('s')) {
+        if (Math.abs(currentRect.height - block.height) < snapThreshold) {
+          result.height = block.height
+          if (resizeDir.includes('n')) {
+            result.y = currentRect.y + (currentRect.height - block.height)
+          }
+        }
+      }
+    })
+  }
+
+  // 2. Alignment Snapping (Edges and Centers)
+  const currentV = []
+  if (!isResizing || resizeDir.includes('w')) currentV.push({ pos: currentRect.x, type: 'start' })
+  if (!isResizing) currentV.push({ pos: currentRect.x + currentRect.width / 2, type: 'center' })
+  if (!isResizing || resizeDir.includes('e')) currentV.push({ pos: currentRect.x + currentRect.width, type: 'end' })
+
+  const currentH = []
+  if (!isResizing || resizeDir.includes('n')) currentH.push({ pos: currentRect.y, type: 'start' })
+  if (!isResizing) currentH.push({ pos: currentRect.y + currentRect.height / 2, type: 'center' })
+  if (!isResizing || resizeDir.includes('s')) currentH.push({ pos: currentRect.y + currentRect.height, type: 'end' })
+
+  let minDiffV = snapThreshold
+  let bestV: number | null = null
+  let bestVPoint: string | null = null
+
+  const checkV = (pos: number, targetPos: number, pointType: string) => {
+    const diff = Math.abs(pos - targetPos)
+    if (diff < minDiffV) {
+      minDiffV = diff
+      bestV = targetPos
+      bestVPoint = pointType
+      return true
+    }
+    return false
+  }
+
+  // Slide Center V
+  currentV.forEach(p => checkV(p.pos, slideWidth / 2, p.type))
+
+  // Other Blocks V
+  otherBlocks.forEach(block => {
+    [block.x, block.x + block.width / 2, block.x + block.width].forEach(t => {
+      currentV.forEach(p => checkV(p.pos, t, p.type))
+    })
+  })
+
+  if (bestV !== null) {
+    if (isResizing) {
+      if (resizeDir?.includes('w')) {
+        const delta = bestV - currentRect.x
+        result.x = bestV
+        result.width = Math.max(1, currentRect.width - delta)
+      } else if (resizeDir?.includes('e')) {
+        result.width = Math.max(1, bestV - currentRect.x)
+      }
+    } else {
+      if (bestVPoint === 'start') result.x = bestV
+      else if (bestVPoint === 'center') result.x = bestV - currentRect.width / 2
+      else if (bestVPoint === 'end') result.x = bestV - currentRect.width
+    }
+    result.guides.push({ type: 'v', pos: bestV })
+  }
+
+  // Vertical Spacing (Check equal gaps)
+  if (!isResizing && otherBlocks.length >= 2) {
+    // Sort other blocks by X
+    const sorted = [...otherBlocks].sort((a, b) => a.x - b.x)
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const b1 = sorted[i]
+      const b2 = sorted[i+1]
+      const gap = b2.x - (b1.x + b1.width)
+      if (gap <= 0) continue
+
+      // Check if current block A can be placed to create same gap: B1 -- B2 -- A
+      const targetX = b2.x + b2.width + gap
+      if (Math.abs(currentRect.x - targetX) < snapThreshold) {
+        result.x = targetX
+        result.spacingGuides?.push({ type: 'v', start: b2.x + b2.width, end: b2.x + b2.width + gap, pos: currentRect.y + currentRect.height/2 })
+        result.spacingGuides?.push({ type: 'v', start: b1.x + b1.width, end: b2.x, pos: currentRect.y + currentRect.height/2 })
+      }
+      // Or A -- B1 -- B2
+      const targetX2 = b1.x - gap - currentRect.width
+      if (Math.abs(currentRect.x - targetX2) < snapThreshold) {
+        result.x = targetX2
+        result.spacingGuides?.push({ type: 'v', start: targetX2 + currentRect.width, end: b1.x, pos: currentRect.y + currentRect.height/2 })
+        result.spacingGuides?.push({ type: 'v', start: b1.x + b1.width, end: b2.x, pos: currentRect.y + currentRect.height/2 })
+      }
+    }
+  }
+
+  // Horizontal Snapping
+  let minDiffH = snapThreshold
+  let bestH: number | null = null
+  let bestHPoint: string | null = null
+
+  const checkH = (pos: number, targetPos: number, pointType: string) => {
+    const diff = Math.abs(pos - targetPos)
+    if (diff < minDiffH) {
+      minDiffH = diff
+      bestH = targetPos
+      bestHPoint = pointType
+      return true
+    }
+    return false
+  }
+
+  currentH.forEach(p => checkH(p.pos, slideHeight / 2, p.type))
+  otherBlocks.forEach(block => {
+    [block.y, block.y + block.height / 2, block.y + block.height].forEach(t => {
+      currentH.forEach(p => checkH(p.pos, t, p.type))
+    })
+  })
+
+  if (bestH !== null) {
+    if (isResizing) {
+      if (resizeDir?.includes('n')) {
+        const delta = bestH - currentRect.y
+        result.y = bestH
+        result.height = Math.max(1, currentRect.height - delta)
+      } else if (resizeDir?.includes('s')) {
+        result.height = Math.max(1, bestH - currentRect.y)
+      }
+    } else {
+      if (bestHPoint === 'start') result.y = bestH
+      else if (bestHPoint === 'center') result.y = bestH - currentRect.height / 2
+      else if (bestHPoint === 'end') result.y = bestH - currentRect.height
+    }
+    result.guides.push({ type: 'h', pos: bestH })
+  }
+
+  // Horizontal Spacing
+  if (!isResizing && otherBlocks.length >= 2) {
+    const sorted = [...otherBlocks].sort((a, b) => a.y - b.y)
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const b1 = sorted[i]
+      const b2 = sorted[i+1]
+      const gap = b2.y - (b1.y + b1.height)
+      if (gap <= 0) continue
+
+      const targetY = b2.y + b2.height + gap
+      if (Math.abs(currentRect.y - targetY) < snapThreshold) {
+        result.y = targetY
+        result.spacingGuides?.push({ type: 'h', start: b2.y + b2.height, end: b2.y + b2.height + gap, pos: currentRect.x + currentRect.width/2 })
+        result.spacingGuides?.push({ type: 'h', start: b1.y + b1.height, end: b2.y, pos: currentRect.x + currentRect.width/2 })
+      }
+      const targetY2 = b1.y - gap - currentRect.height
+      if (Math.abs(currentRect.y - targetY2) < snapThreshold) {
+        result.y = targetY2
+        result.spacingGuides?.push({ type: 'h', start: targetY2 + currentRect.height, end: b1.y, pos: currentRect.x + currentRect.width/2 })
+        result.spacingGuides?.push({ type: 'h', start: b1.y + b1.height, end: b2.y, pos: currentRect.x + currentRect.width/2 })
+      }
+    }
+  }
+
+  return result
+}
+
+
 export function buildScaleSelectionUpdates(
   blocks: EditorBlock[],
   blockIds: string[],
@@ -180,3 +381,6 @@ export function buildScaleSelectionUpdates(
     },
   }))
 }
+
+
+

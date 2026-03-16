@@ -11,7 +11,7 @@ type SlideFrameProps = {
 }
 
 export function SlideFrame({ slideId, interactive, marqueeRect = null }: SlideFrameProps) {
-  const { slides, theme, showGuides, isPlayMode } = useEditorStore()
+  const { slides, theme, showGuides, showGrid, isPlayMode } = useEditorStore()
   const slide = slides.find((item) => item.id === slideId) ?? null
   const background = resolveSlideBackground(theme, slide?.bg ?? 'theme')
 
@@ -24,6 +24,10 @@ export function SlideFrame({ slideId, interactive, marqueeRect = null }: SlideFr
     >
       <SlideBackground theme={theme} bg={background} />
 
+      {interactive && showGrid && !isPlayMode && (
+        <div className="slide-grid" aria-hidden="true" />
+      )}
+
       {interactive && showGuides && !isPlayMode && (
         <div className="slide-guides" aria-hidden="true">
           <span className="guide guide--vertical" />
@@ -32,6 +36,10 @@ export function SlideFrame({ slideId, interactive, marqueeRect = null }: SlideFr
         </div>
       )}
 
+      {/* Container for dynamic alignment guides */}
+      {interactive && !isPlayMode && (
+        <div id="dynamic-guides" className="dynamic-guides" aria-hidden="true" />
+      )}
       <div
         id={interactive ? 'slideContent' : undefined}
         className="slide-content"

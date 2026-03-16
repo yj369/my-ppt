@@ -1330,6 +1330,9 @@ export function SidebarRight() {
     deleteBlocks,
     ungroupBlocks,
     activeEditor,
+    showGrid,
+    showGuides,
+    updatePresentation,
   } = useEditorStore()
 
   const currentSlide = slides.find((s) => s.id === currentSlideId)
@@ -2700,6 +2703,25 @@ export function SidebarRight() {
                     min={0} max={1.8} step={0.1} unit="秒"
                     onChange={(v) => updateSlide(currentSlide.id, { transitionDuration: v })}
                   />
+                </div>
+              </KNPanel>
+
+              <KNPanel title="参考">
+                <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, color: '#555' }}>显示参考线</span>
+                    <Toggle
+                      checked={showGuides}
+                      onChange={() => updatePresentation({ showGuides: !showGuides })}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, color: '#555' }}>显示网格</span>
+                    <Toggle
+                      checked={showGrid}
+                      onChange={() => updatePresentation({ showGrid: !showGrid })}
+                    />
+                  </div>
                 </div>
               </KNPanel>
             </>

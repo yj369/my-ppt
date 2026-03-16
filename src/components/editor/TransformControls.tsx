@@ -2,12 +2,14 @@ import type { Dispatch, MouseEvent as ReactMouseEvent, RefObject, SetStateAction
 import { useCallback, useEffect, useRef } from 'react'
 import {
   buildRotationUpdates,
+  calculateSnap,
   getSelectionBounds,
   getSelectionIdsForBlock,
   normalizeAngle,
 } from '../../lib/selection'
 import type { EditorBlock as BlockType } from '../../types/editor'
 import { useEditorStore } from '../../store'
+import { SLIDE_HEIGHT, SLIDE_WIDTH } from '../../lib/presentation'
 
 type LocalTransform = {
   x: number
@@ -29,6 +31,41 @@ type TransformControlsProps = {
 
 type TransformMode = 'none' | 'drag' | 'resize' | 'rotate'
 
+function renderAlignmentGuides(guides: Array<{ type: 'v' | 'h'; pos: number }>, spacingGuides: Array<{ type: 'v' | 'h'; start: number; end: number; pos: number }> = []) {
+  const container = document.getElementById('dynamic-guides')
+  if (!container) return
+
+  container.innerHTML = ''
+  
+  // Alignment guides
+  guides.forEach((guide) => {
+    const el = document.createElement('div')
+    el.className = `alignment-guide alignment-guide--${guide.type}`
+    if (guide.type === 'v') {
+      el.style.left = `${guide.pos}px`
+    } else {
+      el.style.top = `${guide.pos}px`
+    }
+    container.appendChild(el)
+  })
+
+  // Spacing guides
+  spacingGuides.forEach((sg) => {
+    const el = document.createElement('div')
+    el.className = `spacing-guide spacing-guide--${sg.type}`
+    if (sg.type === 'v') {
+      el.style.left = `${sg.start}px`
+      el.style.width = `${sg.end - sg.start}px`
+      el.style.top = `${sg.pos}px`
+    } else {
+      el.style.top = `${sg.start}px`
+      el.style.height = `${sg.end - sg.start}px`
+      el.style.left = `${sg.pos}px`
+    }
+    container.appendChild(el)
+  })
+}
+
 export function TransformControls({
   block,
   blockRef,
@@ -41,6 +78,10 @@ export function TransformControls({
   const camZoom = useEditorStore((state) => state.camZoom)
   const selectedBlockIds = useEditorStore((state) => state.selectedBlockIds)
   const updateBlocks = useEditorStore((state) => state.updateBlocks)
+  const showGrid = useEditorStore((state) => state.showGrid)
+  const showGuides = useEditorStore((state) => state.showGuides)
+  const slides = useEditorStore((state) => state.slides)
+  
   const transformRef = useRef(localTransform)
   const stateRef = useRef({
     mode: 'none' as TransformMode,
@@ -75,20 +116,54 @@ export function TransformControls({
       const deltaY = (event.clientY - state.startY) / camZoom
 
       if (state.mode === 'drag') {
+        let nextX = state.startL + deltaX
+        let nextY = state.startT + deltaY
+
+        if (showGuides || showGrid) {
+          const currentSlide = slides.find((s) => s.id === slideId)
+          if (currentSlide) {
+            // Filter out selected blocks from "other blocks" to avoid snapping to itself or group
+            const otherBlocks = currentSlide.blocks.filter(
+              (b) => !selectedBlockIds.includes(b.id) && 
+                     (selectedBlockIds.length > 1 || b.id !== block.id)
+            )
+            
+            const snap = calculateSnap(
+              { x: nextX, y: nextY, width: state.startW, height: state.startH },
+              otherBlocks,
+              {
+                gridSize: showGrid ? 40 : undefined,
+                snapThreshold: 5 / camZoom,
+                slideWidth: SLIDE_WIDTH,
+                slideHeight: SLIDE_HEIGHT,
+              }
+            )
+            nextX = snap.x
+            nextY = snap.y
+            
+            if (showGuides) {
+              renderAlignmentGuides(snap.guides, snap.spacingGuides)
+            }
+          }
+        }
+
         setLocalTransform((prev) => ({
           ...prev,
-          x: state.startL + deltaX,
-          y: state.startT + deltaY,
+          x: nextX,
+          y: nextY,
         }))
 
         if (state.linkedBlocks.length > 0) {
+          const actualDeltaX = nextX - state.startL
+          const actualDeltaY = nextY - state.startT
+          
           updateBlocks(
             slideId,
             state.linkedBlocks.map((linkedBlock) => ({
               blockId: linkedBlock.id,
               updates: {
-                x: linkedBlock.x + deltaX,
-                y: linkedBlock.y + deltaY,
+                x: linkedBlock.x + actualDeltaX,
+                y: linkedBlock.y + actualDeltaY,
               },
             })),
           )
@@ -115,6 +190,37 @@ export function TransformControls({
         if (state.dir.includes('n')) {
           height = state.startH - deltaY
           y = state.startT + deltaY
+        }
+
+        // Apply snapping
+        if (showGuides || showGrid) {
+          const currentSlide = slides.find((s) => s.id === slideId)
+          if (currentSlide) {
+            const otherBlocks = currentSlide.blocks.filter(
+              (b) => !selectedBlockIds.includes(b.id) && 
+                     (selectedBlockIds.length > 1 || b.id !== block.id)
+            )
+            
+            const snap = calculateSnap(
+              { x, y, width, height },
+              otherBlocks,
+              {
+                gridSize: showGrid ? 40 : undefined,
+                snapThreshold: 5 / camZoom,
+                slideWidth: SLIDE_WIDTH,
+                slideHeight: SLIDE_HEIGHT,
+                resizeDir: state.dir
+              }
+            )
+            x = snap.x
+            y = snap.y
+            width = snap.width
+            height = snap.height
+            
+            if (showGuides) {
+              renderAlignmentGuides(snap.guides, snap.spacingGuides)
+            }
+          }
         }
 
         // Lock aspect ratio for circles: use the primary drag axis as canonical size
@@ -197,6 +303,10 @@ export function TransformControls({
     const handleMouseUp = () => {
       if (stateRef.current.mode === 'none' || disabled) {
         return
+      }
+
+      if (stateRef.current.mode === 'drag' || stateRef.current.mode === 'resize') {
+        renderAlignmentGuides([])
       }
 
       stateRef.current.mode = 'none'

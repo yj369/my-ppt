@@ -109,6 +109,15 @@ export type BlockAppearance = {
   strokeStyle?: 'none' | 'solid' | 'dashed' | 'dotted'
   // Shape
   radius: number
+  // Box model
+  marginTop?: number
+  marginRight?: number
+  marginBottom?: number
+  marginLeft?: number
+  paddingTop?: number
+  paddingRight?: number
+  paddingBottom?: number
+  paddingLeft?: number
   // Shadow (detailed Keynote-style)
   shadow: boolean
   shadowBlur?: number            // blur radius in px (Keynote: 0–100)
@@ -120,6 +129,8 @@ export type BlockAppearance = {
   reflection?: boolean
   // Typography
   textColor: string
+  textStrokeColor?: string
+  textStrokeWidth?: number
   fontSize: number
   textAlign: TextAlign
   fontFamily?: string

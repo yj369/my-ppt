@@ -1,0 +1,13 @@
+<div id="editable" contenteditable="true">
+  <span style="font-size: 80px" id="myspan">Keynote</span>
+</div>
+<script>
+  setTimeout(() => {
+    const span = document.getElementById('myspan');
+    console.log("Original font size:", span.style.fontSize);
+    
+    // Test if execCommand falls back
+    document.execCommand('fontSize', false, '7');
+    console.log("After execCommand(fontSize, 7): outerHTML is", document.getElementById('editable').innerHTML);
+  }, 100);
+</script>

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
+import type { Editor } from '@tiptap/react'
 import {
   moveSlideBlockAnimation,
   normalizeBlockAnimations,
@@ -47,7 +48,10 @@ export type EditorState = {
   currentSlideId: string | null
   activeBlockId: string | null
   selectedBlockIds: string[]
-  activeInspector: InspectorTab
+  editingTextBlockId: string | null,
+  activeEditor: Editor | null,
+  activeInspector: InspectorTab,
+
   isPlayMode: boolean
   navigationDirection: -1 | 0 | 1
   showGrid: boolean
@@ -101,7 +105,10 @@ export type EditorState = {
   groupBlocks: (slideId: string, blockIds: string[]) => void
   ungroupBlocks: (slideId: string, blockIds: string[]) => void
   setActiveBlock: (id: string | null) => void
-  setPrimarySelectedBlock: (id: string) => void
+  setEditingTextBlock: (id: string | null) => void,
+  setActiveEditor: (editor: Editor | null) => void,
+  setPrimarySelectedBlock: (id: string) => void,
+
   setSelectedBlocks: (ids: string[], activeId?: string | null) => void
   toggleBlockSelection: (id: string) => void
   setActiveInspector: (tab: InspectorTab) => void
@@ -140,7 +147,11 @@ function applyBlockUpdate(block: EditorBlock, updates: BlockUpdate) {
   return next
 }
 
-function buildSelectionState(ids: string[], activeId?: string | null) {
+function buildSelectionState(
+  ids: string[],
+  activeId?: string | null,
+  editingTextBlockId?: string | null,
+) {
   const selectedBlockIds = uniqueIds(ids)
   const nextActiveId = selectedBlockIds.length === 0
     ? null
@@ -151,6 +162,8 @@ function buildSelectionState(ids: string[], activeId?: string | null) {
   return {
     selectedBlockIds,
     activeBlockId: nextActiveId,
+    editingTextBlockId:
+      editingTextBlockId && selectedBlockIds.includes(editingTextBlockId) ? editingTextBlockId : null,
     activeInspector: nextActiveId ? ('format' as const) : ('document' as const),
   }
 }
@@ -197,6 +210,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   currentSlideId: initialSnapshot.currentSlideId,
   activeBlockId: null,
   selectedBlockIds: [],
+  editingTextBlockId: null,
+  activeEditor: null,
   activeInspector: 'format',
   isPlayMode: false,
   navigationDirection: 0,
@@ -220,6 +235,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         currentSlideId: newSlide.id,
         activeBlockId: null,
         selectedBlockIds: [],
+        editingTextBlockId: null,
         navigationDirection: 1 as const,
       }
     }),
@@ -239,6 +255,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         currentSlideId: duplicated.id,
         activeBlockId: null,
         selectedBlockIds: [],
+        editingTextBlockId: null,
         navigationDirection: 1 as const,
       }
     }),
@@ -261,6 +278,7 @@ export const useEditorStore = create<EditorState>((set) => ({
           state.currentSlideId === id ? slides[fallbackIndex]?.id ?? slides[0]?.id ?? null : state.currentSlideId,
         activeBlockId: null,
         selectedBlockIds: [],
+        editingTextBlockId: null,
       }
     }),
   moveSlide: (id, direction) =>
@@ -290,6 +308,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       currentSlideId: id,
       activeBlockId: null,
       selectedBlockIds: [],
+      editingTextBlockId: null,
       navigationDirection: direction,
     })),
   updateSlide: (id, updates) =>
@@ -321,6 +340,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         ),
         activeBlockId: null,
         selectedBlockIds: [],
+        editingTextBlockId: null,
         activeInspector: 'document' as const,
       }
     }),
@@ -346,6 +366,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         currentSlideId: normalized.currentSlideId ?? normalized.slides[0]?.id ?? null,
         activeBlockId: null,
         selectedBlockIds: [],
+        editingTextBlockId: null,
         activeInspector: 'document',
         isPlayMode: false,
         navigationDirection: 0,
@@ -362,6 +383,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       currentSlideId: demo.currentSlideId,
       activeBlockId: null,
       selectedBlockIds: [],
+      editingTextBlockId: null,
       activeInspector: 'document',
       isPlayMode: false,
       navigationDirection: 0,
@@ -389,6 +411,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         ),
         activeBlockId: newBlock.id,
         selectedBlockIds: [newBlock.id],
+        editingTextBlockId: null,
         activeInspector: 'format' as const,
       }
     }),
@@ -478,7 +501,11 @@ export const useEditorStore = create<EditorState>((set) => ({
             blocks: [...slide.blocks, { ...duplicated, zIndex: getNextZIndex(slide.blocks) }],
           })
         }),
-        ...buildSelectionState(duplicatedId ? [duplicatedId] : state.selectedBlockIds, duplicatedId ?? state.activeBlockId),
+        ...buildSelectionState(
+          duplicatedId ? [duplicatedId] : state.selectedBlockIds,
+          duplicatedId ?? state.activeBlockId,
+          state.editingTextBlockId,
+        ),
       }
     }),
   deleteBlock: (slideId, blockId) =>
@@ -493,7 +520,11 @@ export const useEditorStore = create<EditorState>((set) => ({
               })
             : slide,
         ),
-        ...buildSelectionState(nextSelectedIds, state.activeBlockId === blockId ? null : state.activeBlockId),
+        ...buildSelectionState(
+          nextSelectedIds,
+          state.activeBlockId === blockId ? null : state.activeBlockId,
+          state.editingTextBlockId,
+        ),
       }
     }),
   deleteBlocks: (slideId, blockIds) =>
@@ -512,6 +543,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         ...buildSelectionState(
           nextSelectedIds,
           state.activeBlockId && blockIdSet.has(state.activeBlockId) ? null : state.activeBlockId,
+          state.editingTextBlockId,
         ),
       }
     }),
@@ -667,16 +699,27 @@ export const useEditorStore = create<EditorState>((set) => ({
       }
     }),
   setActiveBlock: (id) =>
-    set(() => buildSelectionState(id ? [id] : [], id)),
+    set((state) => buildSelectionState(id ? [id] : [], id, state.editingTextBlockId)),
+  setEditingTextBlock: (id) =>
+    set((state) => ({
+      editingTextBlockId:
+        id && state.selectedBlockIds.includes(id)
+          ? id
+          : id && state.activeBlockId === id
+          ? id
+          : null,
+    })),
+  setActiveEditor: (editor) => set(() => ({ activeEditor: editor })),
   setPrimarySelectedBlock: (id) =>
     set((state) => ({
       ...buildSelectionState(
         state.selectedBlockIds.includes(id) ? state.selectedBlockIds : [id],
         id,
+        state.editingTextBlockId,
       ),
     })),
   setSelectedBlocks: (ids, activeId) =>
-    set(() => buildSelectionState(ids, activeId)),
+    set((state) => buildSelectionState(ids, activeId, state.editingTextBlockId)),
   toggleBlockSelection: (id) =>
     set((state) => {
       if (state.selectedBlockIds.includes(id)) {
@@ -684,10 +727,11 @@ export const useEditorStore = create<EditorState>((set) => ({
         return buildSelectionState(
           nextSelectedIds,
           state.activeBlockId === id ? null : state.activeBlockId,
+          state.editingTextBlockId,
         )
       }
 
-      return buildSelectionState([...state.selectedBlockIds, id], id)
+      return buildSelectionState([...state.selectedBlockIds, id], id, state.editingTextBlockId)
     }),
   setActiveInspector: (tab) => set(() => ({ activeInspector: tab })),
   togglePlayMode: (force) =>
@@ -695,6 +739,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       isPlayMode: typeof force === 'boolean' ? force : !state.isPlayMode,
       activeBlockId: null,
       selectedBlockIds: [],
+      editingTextBlockId: null,
       navigationDirection: 0,
     })),
   nextSlide: () =>
@@ -712,6 +757,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         currentSlideId: state.slides[nextIndex].id,
         activeBlockId: null,
         selectedBlockIds: [],
+        editingTextBlockId: null,
         navigationDirection: 1 as const,
       }
     }),
@@ -734,6 +780,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         currentSlideId: previousId,
         activeBlockId: null,
         selectedBlockIds: [],
+        editingTextBlockId: null,
         navigationDirection: -1 as const,
       }
     }),

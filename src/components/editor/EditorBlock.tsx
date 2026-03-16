@@ -16,17 +16,17 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
     slides,
     activeBlockId,
     selectedBlockIds,
+    editingTextBlockId,
     setActiveBlock,
+    setEditingTextBlock,
     setPrimarySelectedBlock,
     setSelectedBlocks,
     toggleBlockSelection,
     updateBlock,
-    deleteBlock,
     isPlayMode,
   } = useEditorStore()
 
   const blockRef = useRef<HTMLDivElement>(null)
-  const [isEditing, setIsEditing] = useState(false)
   const [localTransform, setLocalTransform] = useState({
     x: block.x,
     y: block.y,
@@ -39,6 +39,8 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
   const blockSelectionIds = slide ? getSelectionIdsForBlock(slide.blocks, block.id) : [block.id]
   const isSelected = interactive && selectedBlockIds.includes(block.id)
   const isPrimarySelected = interactive && activeBlockId === block.id
+  const isEditing = interactive && editingTextBlockId === block.id
+  const isTextBlock = ['eyebrow', 'heading', 'subheading', 'body', 'bullet', 'quote'].includes(block.type)
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -57,12 +59,22 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
   useEffect(() => {
     if (!isSelected && isEditing) {
       const frame = window.requestAnimationFrame(() => {
-        setIsEditing(false)
+        setEditingTextBlock(null)
       })
 
       return () => window.cancelAnimationFrame(frame)
     }
-  }, [isEditing, isSelected])
+  }, [isEditing, isSelected, setEditingTextBlock])
+
+  useEffect(() => {
+    if (isEditing && selectedBlockIds.length > 1) {
+      const frame = window.requestAnimationFrame(() => {
+        setEditingTextBlock(null)
+      })
+
+      return () => window.cancelAnimationFrame(frame)
+    }
+  }, [isEditing, selectedBlockIds.length, setEditingTextBlock])
 
   const commitTransform = (updates: Partial<BlockType>) => {
     updateBlock(slideId, block.id, updates)
@@ -77,6 +89,7 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
         isSelected ? 'is-selected' : '',
         isPrimarySelected ? 'is-primary-selected' : '',
         isEditing ? 'is-editing' : '',
+        isTextBlock ? 'is-text-block' : '',
         block.locked ? 'is-locked' : '',
         block.hidden ? 'is-hidden' : '',
       ]
@@ -110,6 +123,10 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
           return
         }
 
+        if (isEditing && (event.target as HTMLElement).closest('[contenteditable="true"]')) {
+          return
+        }
+
         if (event.metaKey || event.ctrlKey || event.shiftKey) {
           blockSelectionIds.forEach((blockId) => toggleBlockSelection(blockId))
           event.stopPropagation()
@@ -117,6 +134,9 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
         }
 
         if (block.groupId) {
+          if (isEditing) {
+            setEditingTextBlock(null)
+          }
           setSelectedBlocks(blockSelectionIds, block.id)
           return
         }
@@ -126,6 +146,9 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
           return
         }
 
+        if (isEditing) {
+          setEditingTextBlock(null)
+        }
         setActiveBlock(block.id)
       }}
       onDoubleClickCapture={(event) => {
@@ -134,13 +157,14 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
         }
 
         event.stopPropagation()
-        setIsEditing(true)
+        setActiveBlock(block.id)
+        setEditingTextBlock(block.id)
       }}
     >
       <BlockRenderer block={block} slideId={slideId} isEditing={isEditing} />
 
       {interactive && !isPlayMode && (
-        <>
+        !isEditing && (
           <TransformControls
             block={block}
             blockRef={blockRef}
@@ -150,21 +174,7 @@ export function EditorBlock({ block, slideId, interactive }: EditorBlockProps) {
             commitTransform={commitTransform}
             disabled={block.locked}
           />
-          {isPrimarySelected && (
-            <div className="block-chip-group">
-              <span className="block-chip">{block.name}</span>
-              <button
-                className="block-chip block-chip--danger"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  deleteBlock(slideId, block.id)
-                }}
-              >
-                删除
-              </button>
-            </div>
-          )}
-        </>
+        )
       )}
     </div>
   )

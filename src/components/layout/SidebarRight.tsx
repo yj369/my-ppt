@@ -20,6 +20,7 @@ import {
   Trash2,
   Underline,
   X,
+  Link2,
 } from 'lucide-react'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -39,87 +40,181 @@ import {
   LAYOUT_OPTIONS,
   TRANSITION_OPTIONS,
 } from '../../lib/presentation'
+import type { SelectedTextStyles } from '../../lib/rich-text'
 import { formatCssColor, parseCssColor, rgbaToHex, withAlpha, type RgbaColor } from '../../lib/colors'
 import {
-  buildMoveSelectionUpdates,
-  buildRotateSelectionUpdates,
-  buildScaleSelectionUpdates,
-  getAngleDelta,
   getSelectionBounds,
   normalizeAngle,
+  getAngleDelta,
+  buildMoveSelectionUpdates,
+  buildScaleSelectionUpdates,
+  buildRotateSelectionUpdates,
 } from '../../lib/selection'
 import { useEditorStore } from '../../store'
 import type { AnimationPhase, EditorBlock, InspectorTab, TriggerType } from '../../types/editor'
+import type { Editor } from '@tiptap/react'
 
-function isEditableTarget() {
-  const target = document.activeElement as HTMLElement | null
-  return Boolean(target?.isContentEditable)
-}
+// const AUTO_HEIGHT_TEXT_BLOCKS = new Set<EditorBlock['type']>(['eyebrow', 'heading', 'subheading', 'body'])
 
-function runRichTextCommand(command: string) {
-  if (isEditableTarget()) {
-    document.execCommand(command, false)
-  }
-}
-
-function getActiveEditableElement() {
-  const activeElement = document.activeElement as HTMLElement | null
-  if (activeElement?.isContentEditable) {
-    return activeElement
-  }
-
-  const selection = window.getSelection()
-  const anchorElement = selection?.anchorNode instanceof HTMLElement
-    ? selection.anchorNode
-    : selection?.anchorNode?.parentElement ?? null
-
-  return anchorElement?.closest('[contenteditable="true"]') as HTMLElement | null
-}
-
-function normalizeRichTextFontSize(editableElement: HTMLElement, fontSize: number) {
-  editableElement.querySelectorAll('font[size]').forEach((fontTag) => {
-    const span = document.createElement('span')
-    span.style.fontSize = `${fontSize}px`
-    while (fontTag.firstChild) {
-      span.appendChild(fontTag.firstChild)
-    }
-    fontTag.replaceWith(span)
-  })
-}
-
-function applyRichTextFontSize(fontSize: number) {
-  const editableElement = getActiveEditableElement()
-  if (!editableElement) {
-    return false
-  }
-
-  document.execCommand('styleWithCSS', false, 'false')
-  document.execCommand('fontSize', false, '7')
-  normalizeRichTextFontSize(editableElement, fontSize)
+function applyRichTextMark(mark: 'bold' | 'italic' | 'underline' | 'line-through' | 'subscript' | 'superscript', activeEditor: Editor | null) {
+  if (!activeEditor) return false
+  if (mark === 'bold') activeEditor.chain().toggleBold().run()
+  if (mark === 'italic') activeEditor.chain().toggleItalic().run()
+  if (mark === 'underline') activeEditor.chain().toggleUnderline().run()
+  if (mark === 'line-through') activeEditor.chain().toggleStrike().run()
+  if (mark === 'subscript') activeEditor.chain().toggleSubscript().run()
+  if (mark === 'superscript') activeEditor.chain().toggleSuperscript().run()
   return true
 }
 
-function updateEditableNodesHtml(
-  html: string,
-  updater: (element: HTMLElement) => void,
+function applyRichTextTextFill(value: string, activeEditor: Editor | null) {
+  if (!activeEditor) return false
+  activeEditor.chain().setMark('textStyle', { textFill: value }).run()
+  return true
+}
+
+function applyRichTextFontSize(fontSize: number, activeEditor: Editor | null) {
+  if (!activeEditor) return false
+  activeEditor.chain().setMark('textStyle', { fontSize: `${fontSize}px` }).run()
+  return true
+}
+
+function applyRichTextFontFamily(fontFamily: string, activeEditor: Editor | null) {
+  if (!activeEditor) return false
+  activeEditor.chain().setFontFamily(fontFamily).run()
+  return true
+}
+
+function applyRichTextTextAlign(align: 'left' | 'center' | 'right' | 'justify', activeEditor: Editor | null) {
+  if (!activeEditor) return false
+  activeEditor.chain().setTextAlign(align).run()
+  return true
+}
+
+function applyRichTextFontWeight(fontWeight: string, activeEditor: Editor | null) {
+  if (!activeEditor) return false
+  activeEditor.chain().setMark('textStyle', { fontWeight }).run()
+  return true
+}
+
+function applyRichTextLetterSpacing(letterSpacing: number, activeEditor: Editor | null) {
+  if (!activeEditor) return false
+  activeEditor.chain().setMark('textStyle', { letterSpacing: `${letterSpacing}px` }).run()
+  return true
+}
+
+function applyRichTextLineHeight(lineHeight: number, activeEditor: Editor | null) {
+  if (!activeEditor) return false
+  activeEditor.chain().setMark('textStyle', { lineHeight: String(lineHeight) }).run()
+  return true
+}
+
+function applyRichTextTextStroke(
+  {
+    color,
+    width,
+  }: {
+    color?: string
+    width?: number
+  },
+  activeEditor: Editor | null,
 ) {
-  const container = document.createElement('div')
-  container.innerHTML = html
+  if (!activeEditor) return false
 
-  const editableNodes = Array.from(container.querySelectorAll<HTMLElement>('[contenteditable]'))
-  const targets = editableNodes.length > 0
-    ? editableNodes
-    : container.firstElementChild instanceof HTMLElement
-    ? [container.firstElementChild]
-    : []
-
-  targets.forEach((element) => updater(element))
-  return container.innerHTML
+  const nextWidth = Math.max(0, width ?? 0)
+  activeEditor.chain().setMark('textStyle', {
+    textStrokeColor: nextWidth > 0 ? (color ?? 'transparent') : 'transparent',
+    textStrokeWidth: `${nextWidth}px`,
+  }).run()
+  return true
 }
 
-function normalizeColor(value?: string) {
-  return value || '#ffffff'
+function preventMouseFocusSteal(event: React.MouseEvent<HTMLElement>) {
+  const target = event.target as HTMLElement
+  if (target.closest('input, select, textarea, [contenteditable="true"]')) return
+  event.preventDefault()
 }
+
+function parseTextDecorationTokens(value: string) {
+  const tokens = new Set<string>()
+  if (value.includes('underline')) tokens.add('underline')
+  if (value.includes('line-through')) tokens.add('line-through')
+  return tokens
+}
+
+function buildTextDecorationValue(tokens: Set<string>) {
+  return tokens.size > 0 ? Array.from(tokens).join(' ') : 'none'
+}
+
+function normalizeColor(value?: string) { return value || '#ffffff' }
+
+function parseEditorNumericStyle(value: string | number | null | undefined) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value !== 'string') return null
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function formatColorControlDetail(value: string, { mixed = false, transparentLabel = '透明' } = {}) {
+  if (mixed) return '混合'
+  if (isGradientValue(value)) {
+    const p = parseGradient(value); return p ? `${p.stops.length} 个色标 · ${Math.round(p.angle)}°` : '渐变'
+  }
+  const p = parseCssColor(value)
+  if (!p) return value
+  return p.a <= 0 ? transparentLabel : formatCssColor(p, p.a < 1 ? 'rgba' : 'hex')
+}
+
+function getTextStrokeFallbackColor(...values: Array<string | null | undefined>) {
+  for (const v of values) {
+    if (!v) continue
+    const p = parseCssColor(isGradientValue(v) ? getPrimaryGradientColor(parseGradient(v)?.stops ?? []) : v)
+    if (p && p.a > 0) return formatCssColor(p, p.a < 1 ? 'rgba' : 'hex')
+  }
+  return '#ffffff'
+}
+
+/*
+function getBlockElement(blockId: string | null) {
+  if (!blockId) return null
+  return Array.from(document.getElementById('slideContent')?.querySelectorAll<HTMLElement>('.editor-block') ?? []).find(el => el.dataset.blockId === blockId) ?? null
+}
+*/
+
+/*
+function getBlockEditableElement(blockId: string | null) {
+  return getBlockElement(blockId)?.querySelector<HTMLElement>('[contenteditable="true"]') ?? null
+}
+*/
+
+/*
+function shouldRefocusEditableAfterInlineEdit() {
+  const activeElement = document.activeElement as HTMLElement | null
+  if (!activeElement) return true
+  if (activeElement.isContentEditable) return true
+  if (activeElement.closest('.kn2-sidebar, .gcp-popover')) return false
+  return !activeElement.matches('input, select, textarea, button')
+}
+
+function measureAutoHeightTextBlock(blockId: string | null) {
+  if (!blockId) return null
+  const el = getBlockElement(blockId)
+  const wrapper = el?.querySelector<HTMLElement>('.tpl-wrapper')
+  const content = wrapper?.querySelector<HTMLElement>('.ProseMirror') ?? wrapper
+  if (!wrapper || !content) return null
+  const h = Math.max(Math.ceil(content.getBoundingClientRect().height), Math.ceil(content.scrollHeight))
+  return Number.isFinite(h) && h > 0 ? h : null
+}
+*/
+
+type TextInspectorState = {
+  isEditing: boolean
+  hasSelection: boolean
+  styles: SelectedTextStyles | null
+  baseFontSize: number | null
+}
+
+const MIXED_CONTROL_VALUE = '__mixed__'
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Sub-components                                                             */
@@ -132,18 +227,36 @@ function StepperInput({
   min = -9999,
   max = 9999,
   suffix,
+  prefix,
   width = 72,
+  displayValue,
+  liveOnInput = false,
 }: {
   value: number
   onChange: (v: number) => void
   min?: number
   max?: number
   suffix?: string
+  prefix?: React.ReactNode
   width?: React.CSSProperties['width']
+  displayValue?: string
+  liveOnInput?: boolean
 }) {
   const clamp = (v: number) => Math.min(max, Math.max(min, v))
+
+  // Determine the "real" underlying value being displayed. When displayValue is provided (e.g. from multiple selections showing "__mixed__" or similar),
+  // we still want the internal draft to default to `value` so increment/decrement works logically from the base value,
+  // but if the user *just* focuses, they might expect to see `value`.
   const [draft, setDraft] = useState(String(value))
   const [isFocused, setIsFocused] = useState(false)
+
+  // Sync draft when external value changes, but only if we are not focused.
+  // This fixes the issue where changing selection updates the parent value, but the stepper still holds the old draft.
+  useEffect(() => {
+    if (!isFocused) {
+      setDraft(String(value))
+    }
+  }, [value, isFocused])
 
   const commitDraft = () => {
     const trimmed = draft.trim()
@@ -173,17 +286,40 @@ function StepperInput({
 
   return (
     <div className="kn2-stepper" style={{ width }}>
+      {prefix && <span className="kn2-stepper__prefix">{prefix}</span>}
       <input
         className="kn2-stepper__input"
         type="text"
         inputMode="decimal"
-        value={isFocused ? draft : String(value)}
+        value={isFocused ? draft : (displayValue ?? String(value))}
         onFocus={(event) => {
           setIsFocused(true)
+          // When focusing a mixed state, start draft from an empty string or the base value
           setDraft(String(value))
-          event.currentTarget.select()
+          // requestAnimationFrame ensures the select happens after the browser's default focus behavior (which might place the cursor at the end)
+          const target = event.currentTarget
+          requestAnimationFrame(() => target.select())
         }}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(e) => {
+          const nextDraft = e.target.value
+          setDraft(nextDraft)
+
+          if (!liveOnInput) {
+            return
+          }
+
+          const trimmed = nextDraft.trim()
+          if (trimmed === '' || trimmed === '-' || trimmed === '.' || trimmed === '-.') {
+            return
+          }
+
+          const parsed = Number(trimmed)
+          if (!Number.isFinite(parsed)) {
+            return
+          }
+
+          onChange(clamp(parsed))
+        }}
         onBlur={() => {
           setIsFocused(false)
           commitDraft()
@@ -236,6 +372,7 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       className={`kn2-toggle ${checked ? 'kn2-toggle--checked' : ''}`}
+      onMouseDown={(event) => event.preventDefault()}
       onClick={onChange}
     >
       <span className="kn2-toggle__knob" />
@@ -478,6 +615,7 @@ function KNPillGroup<T extends string>({
         <button
           key={opt.value}
           title={opt.label}
+          onMouseDown={preventMouseFocusSteal}
           onClick={() => onChange(opt.value)}
           className={`kn2-pill-btn ${stretch ? 'kn2-pill-btn--stretch' : ''} ${isSelected(opt.value) ? 'kn2-pill-btn--active' : ''}`}
         >
@@ -497,6 +635,8 @@ function KNSliderRow({
   step = 1,
   unit = '',
   inputWidth,
+  displayValue,
+  liveOnInput = false,
   onChange,
 }: {
   label: string
@@ -506,6 +646,8 @@ function KNSliderRow({
   step?: number
   unit?: string
   inputWidth?: React.CSSProperties['width']
+  displayValue?: string
+  liveOnInput?: boolean
   onChange: (val: number) => void
 }) {
   const clamp = (v: number) => Math.min(max, Math.max(min, v))
@@ -546,6 +688,8 @@ function KNSliderRow({
         max={max}
         suffix={unit}
         width={inputWidth ?? (!label ? 46 : (unit === '%' ? 58 : 52))}
+        displayValue={displayValue}
+        liveOnInput={liveOnInput}
       />
     </div>
   )
@@ -579,6 +723,68 @@ function KNAngleRow({
             width={stepperWidth ?? '100%'}
           />
         </div>
+      </div>
+    </div>
+  )
+}
+
+function BoxModelControl({
+  title,
+  values,
+  onChange,
+}: {
+  title: string
+  values: {
+    top: number
+    right: number
+    bottom: number
+    left: number
+  }
+  onChange: (updates: Partial<{ top: number; right: number; bottom: number; left: number }>) => void
+}) {
+  const [isLinked, setIsLinked] = useState(false)
+
+  const fields: Array<{ key: 'top' | 'bottom' | 'left' | 'right'; label: string }> = [
+    { key: 'top', label: '上' },
+    { key: 'bottom', label: '下' },
+    { key: 'left', label: '左' },
+    { key: 'right', label: '右' },
+  ]
+
+  const handleChange = (key: 'top' | 'bottom' | 'left' | 'right', value: number) => {
+    if (isLinked) {
+      onChange({ top: value, right: value, bottom: value, left: value })
+    } else {
+      onChange({ [key]: value })
+    }
+  }
+
+  return (
+    <div className="kn2-box-model" onMouseDown={preventMouseFocusSteal}>
+      <div className="kn2-box-model__header">
+        <div className="kn2-box-model__title">{title}</div>
+        <button
+          type="button"
+          className={`kn2-link-btn ${isLinked ? 'kn2-link-btn--active' : ''}`}
+          onClick={() => setIsLinked(!isLinked)}
+          title={isLinked ? '取消关联' : '关联边距'}
+        >
+          <Link2 size={12} />
+        </button>
+      </div>
+      <div className="kn2-box-model__grid">
+        {fields.map((field) => (
+          <div key={field.key} className="kn2-box-model__field">
+            <StepperInput
+              prefix={<span style={{ fontWeight: 500 }}>{field.label}</span>}
+              value={values[field.key]}
+              onChange={(value) => handleChange(field.key, value)}
+              min={0}
+              max={999}
+              width="100%"
+            />
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -855,6 +1061,7 @@ function GradientColorPicker({
       <button
         type="button"
         className={isFieldTrigger ? 'gcp-trigger gcp-trigger--field' : 'gcp-swatch'}
+        onMouseDown={preventMouseFocusSteal}
         onClick={openPopover}
         title={value}
         ref={swatchRef}
@@ -880,7 +1087,14 @@ function GradientColorPicker({
           className="gcp-popover"
           ref={popoverRef}
           style={popoverStyle}
-          onMouseDown={(e) => e.stopPropagation()}
+          // CRITICAL: Prevent clicks inside the color picker from stealing focus from the editable text
+          onMouseDown={(e) => {
+            const isInput = (e.target as HTMLElement)?.tagName === 'INPUT'
+            if (!isInput) {
+              e.preventDefault()
+            }
+            e.stopPropagation() // Also stop propagation for the popover itself
+          }}
         >
           {allowGradient && (
             <div className="gcp-tabs">
@@ -1097,6 +1311,7 @@ export function SidebarRight() {
     currentSlideId,
     activeBlockId,
     selectedBlockIds,
+    editingTextBlockId,
     activeInspector,
     setActiveInspector,
     applySlideLayout,
@@ -1114,6 +1329,7 @@ export function SidebarRight() {
     groupBlocks,
     deleteBlocks,
     ungroupBlocks,
+    activeEditor,
   } = useEditorStore()
 
   const currentSlide = slides.find((s) => s.id === currentSlideId)
@@ -1136,6 +1352,12 @@ export function SidebarRight() {
   const [animationTab, setAnimationTab] = useState<AnimationPhase>('buildIn')
   const [isBuildOrderOpen, setBuildOrderOpen] = useState(false)
   const [previewLoopKey, setPreviewLoopKey] = useState<string | null>(null)
+  const [textInspector, setTextInspector] = useState<TextInspectorState>({
+    isEditing: false,
+    hasSelection: false,
+    styles: null,
+    baseFontSize: null,
+  })
 
   const activeAnimations = activeBlock ? getBlockAnimations(activeBlock) : null
   const activeAnimation = activeAnimations?.[animationTab] ?? null
@@ -1174,6 +1396,108 @@ export function SidebarRight() {
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
   }, [isBuildOrderOpen])
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      // @ts-ignore
+      if (typeof rememberEditableSelection !== 'undefined') rememberEditableSelection()
+    }
+    const handleMouseDownCapture = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('.kn2-sidebar, .gcp-popover')) {
+        // @ts-ignore
+        if (typeof requestEditableSelectionPreservation !== 'undefined') requestEditableSelectionPreservation()
+      }
+    }
+
+    document.addEventListener('mousedown', handleMouseDownCapture, true)
+    document.addEventListener('selectionchange', handleSelectionChange)
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDownCapture, true)
+      document.removeEventListener('selectionchange', handleSelectionChange)
+    }
+  }, [])
+
+  const syncTextInspector = useEffectEvent(() => {
+    if (!activeEditor) {
+      setTextInspector({ isEditing: false, hasSelection: false, styles: null, baseFontSize: null })
+      return
+    }
+
+    const { from, to } = activeEditor.state.selection
+    const hasSelection = from !== to
+    const attributes = activeEditor.getAttributes('textStyle')
+    const decorationTokens = new Set<string>()
+    if (activeEditor.isActive('underline')) decorationTokens.add('underline')
+    if (activeEditor.isActive('strike')) decorationTokens.add('line-through')
+    
+    // In mixed font size states, `attributes.fontSize` is undefined, but we still need the size of the first text node.
+    let baseFontSize: number | null = null
+    activeEditor.state.doc.nodesBetween(from, to, (node) => {
+      if (node.isText && baseFontSize === null) {
+        // Tiptap's TextStyle mark stores styles in node.marks
+        const textStyleMark = node.marks.find((m) => m.type.name === 'textStyle')
+        if (textStyleMark && textStyleMark.attrs.fontSize) {
+          baseFontSize = parseEditorNumericStyle(textStyleMark.attrs.fontSize)
+        }
+      }
+    })
+
+    // Convert TipTap attributes to SelectedTextStyles format
+    const styles: SelectedTextStyles = {
+      fontFamily: attributes.fontFamily || null,
+      fontSize: parseEditorNumericStyle(attributes.fontSize),
+      fontWeight: attributes.fontWeight || (activeEditor.isActive('bold') ? 'bold' : 'normal'),
+      fontStyle: activeEditor.isActive('italic') ? 'italic' : 'normal',
+      textDecoration: buildTextDecorationValue(decorationTokens),
+      textAlign: (activeEditor.getAttributes('paragraph').textAlign || activeEditor.getAttributes('heading').textAlign || 'left') as any,
+      letterSpacing: parseEditorNumericStyle(attributes.letterSpacing),
+      lineHeight: parseEditorNumericStyle(attributes.lineHeight),
+      textColor: attributes.textFill || null,
+      textStrokeColor: attributes.textStrokeColor || null,
+      textStrokeWidth: parseEditorNumericStyle(attributes.textStrokeWidth),
+      isBold: activeEditor.isActive('bold') || ['bold', '600', '700', '800', '900'].includes(String(attributes.fontWeight || '')),
+      isItalic: activeEditor.isActive('italic'),
+      isUnderline: activeEditor.isActive('underline'),
+      isStrikeThrough: activeEditor.isActive('strike'),
+    }
+
+    setTextInspector({
+      isEditing: true,
+      hasSelection,
+      styles,
+      baseFontSize,
+    })
+  })
+
+  useEffect(() => {
+    if (!activeEditor) {
+      syncTextInspector()
+      return
+    }
+
+    activeEditor.on('selectionUpdate', syncTextInspector)
+    activeEditor.on('transaction', syncTextInspector)
+    syncTextInspector()
+
+    return () => {
+      activeEditor.off('selectionUpdate', syncTextInspector)
+      activeEditor.off('transaction', syncTextInspector)
+    }
+  }, [activeEditor])
+
+  useEffect(() => {
+    // @ts-ignore
+    if (!editingTextBlockId || (typeof savedEditableSelection !== 'undefined' && savedEditableSelection?.blockId !== editingTextBlockId)) {
+      // @ts-ignore
+      if (typeof clearSavedEditableSelections !== 'undefined') clearSavedEditableSelections()
+    }
+  }, [editingTextBlockId, currentSlideId])
+
+  useEffect(() => () => {
+    // @ts-ignore
+    if (typeof clearSavedEditableSelections !== 'undefined') clearSavedEditableSelections()
+  }, [])
 
   const stopPreview = () => {
     if (previewRef.current?.block) {
@@ -1269,31 +1593,113 @@ export function SidebarRight() {
 
     updApp({ fillType: 'color', fill: nextValue })
   }
-  const persistActiveBlockContent = () => {
-    if (!currentSlide || !activeBlock) return null
-    const blockElement = Array.from(
-      document.getElementById('slideContent')?.querySelectorAll<HTMLElement>('.editor-block') ?? [],
-    ).find((element) => element.dataset.blockId === activeBlock.id)
-    return blockElement?.querySelector<HTMLElement>('.tpl-wrapper')?.innerHTML ?? null
-  }
-  const applyFontSize = (fontSize: number) => {
-    if (!currentSlide || !activeBlock) return
+  /*
+  const restoreInlineSelection = () => {
+    if (!activeBlock) return
+    if (editingTextBlockId !== activeBlock.id) return
 
-    if (applyRichTextFontSize(fontSize)) {
-      const content = persistActiveBlockContent()
-      updateBlock(currentSlide.id, activeBlock.id, {
-        appearance: { fontSize },
-        ...(content ? { content } : {}),
-      })
-      return
+    if (activeEditor) {
+      activeEditor.commands.focus()
     }
+  }
 
-    updateBlock(currentSlide.id, activeBlock.id, {
-      appearance: { fontSize },
-      content: updateEditableNodesHtml(activeBlock.content, (element) => {
-        element.style.fontSize = `${fontSize}px`
-      }),
-    })
+  const canApplyToSelectedText = () => (
+    activeBlock &&
+    editingTextBlockId === activeBlock.id &&
+    activeEditor &&
+    textInspector.isEditing &&
+    textInspector.hasSelection
+  )
+  */
+  const applyTextFill = (color: string) => {
+    if (!activeBlock) return
+    if (isInlineTextEditing) {
+      applyRichTextTextFill(color, activeEditor)
+    } else {
+      updApp({ textColor: color })
+    }
+  }
+
+  const applyTextStroke = ({
+    color,
+    width,
+  }: {
+    color?: string
+    width?: number
+  }) => {
+    if (!activeBlock) return
+    const nextWidth = Math.max(0, width ?? displayedTextStrokeWidth)
+    const nextColor = nextWidth > 0
+      ? (color ?? getTextStrokeFallbackColor(
+          displayedTextStrokeColor,
+          displayedTextColor,
+          activeBlock.appearance.textStrokeColor,
+          activeBlock.appearance.textColor,
+        ))
+      : 'transparent'
+
+    if (isInlineTextEditing) {
+      applyRichTextTextStroke({ color: nextColor, width: nextWidth }, activeEditor)
+    } else {
+      updApp({
+        textStrokeColor: nextColor,
+        textStrokeWidth: nextWidth,
+      })
+    }
+  }
+
+  const applyFontSize = (fontSize: number) => {
+    if (!activeBlock) return
+    if (isInlineTextEditing) {
+      applyRichTextFontSize(fontSize, activeEditor)
+    } else {
+      updApp({ fontSize })
+    }
+  }
+
+  const applyFontFamily = (fontFamily: string) => {
+    if (!activeBlock) return
+    if (isInlineTextEditing) {
+      applyRichTextFontFamily(fontFamily, activeEditor)
+    } else {
+      updApp({ fontFamily })
+    }
+  }
+
+  const applyFontWeight = (fontWeight: string) => {
+    if (!activeBlock) return
+    if (isInlineTextEditing) {
+      applyRichTextFontWeight(fontWeight, activeEditor)
+    } else {
+      updApp({ fontWeight })
+    }
+  }
+
+  const applyTextAlign = (textAlign: NonNullable<EditorBlock['appearance']['textAlign']>) => {
+    if (!activeBlock) return
+    if (isInlineTextEditing) {
+      applyRichTextTextAlign(textAlign, activeEditor)
+    } else {
+      updApp({ textAlign })
+    }
+  }
+
+  const applyLetterSpacing = (letterSpacing: number) => {
+    if (!activeBlock) return
+    if (isInlineTextEditing) {
+      applyRichTextLetterSpacing(letterSpacing, activeEditor)
+    } else {
+      updApp({ letterSpacing })
+    }
+  }
+
+  const applyLineHeight = (lineHeight: number) => {
+    if (!activeBlock) return
+    if (isInlineTextEditing) {
+      applyRichTextLineHeight(lineHeight, activeEditor)
+    } else {
+      updApp({ lineHeight })
+    }
   }
   const applyArrangeX = (nextX: number) => {
     if (!currentSlide || !activeBlock) return
@@ -1377,6 +1783,100 @@ export function SidebarRight() {
     : null
   const arrangeRotation = activeBlock ? normalizeAngle(activeBlock.rotation) : 0
   const fillControl = activeBlock ? getFillControlState(activeBlock.appearance) : null
+  const isInlineTextEditing = !!(
+    activeBlock
+    && editingTextBlockId === activeBlock.id
+    && activeEditor
+  )
+  const displayedTextStyles = textInspector.styles
+  const displayedFontFamily = textInspector.isEditing
+    ? displayedTextStyles?.fontFamily ?? MIXED_CONTROL_VALUE
+    : activeBlock?.appearance.fontFamily || 'Helvetica Neue'
+  const displayedFontWeight = textInspector.isEditing
+    ? displayedTextStyles?.fontWeight ?? MIXED_CONTROL_VALUE
+    : activeBlock?.appearance.fontWeight || 'normal'
+  const displayedFontSize = textInspector.isEditing
+    ? displayedTextStyles?.fontSize ?? textInspector.baseFontSize ?? activeBlock?.appearance.fontSize ?? 1
+    : activeBlock?.appearance.fontSize ?? 1
+  const displayedFontSizeLabel = textInspector.isEditing && displayedTextStyles?.fontSize === null ? '混合' : undefined
+  const displayedTextAlign = textInspector.isEditing
+    ? displayedTextStyles?.textAlign ?? activeBlock?.appearance.textAlign ?? 'left'
+    : activeBlock?.appearance.textAlign ?? 'left'
+  const displayedTextColor = textInspector.isEditing
+    ? displayedTextStyles?.textColor ?? normalizeColor(activeBlock?.appearance.textColor)
+    : normalizeColor(activeBlock?.appearance.textColor)
+  const displayedTextStrokeColor = textInspector.isEditing
+    ? displayedTextStyles?.textStrokeColor ?? activeBlock?.appearance.textStrokeColor ?? 'transparent'
+    : activeBlock?.appearance.textStrokeColor ?? 'transparent'
+  const displayedTextStrokeWidth = textInspector.isEditing
+    ? displayedTextStyles?.textStrokeWidth ?? activeBlock?.appearance.textStrokeWidth ?? 0
+    : activeBlock?.appearance.textStrokeWidth ?? 0
+  const displayedLetterSpacing = textInspector.isEditing
+    ? displayedTextStyles?.letterSpacing ?? activeBlock?.appearance.letterSpacing ?? 0
+    : activeBlock?.appearance.letterSpacing ?? 0
+  const displayedLineHeight = textInspector.isEditing
+    ? displayedTextStyles?.lineHeight ?? activeBlock?.appearance.lineHeight ?? 1.4
+    : activeBlock?.appearance.lineHeight ?? 1.4
+  const displayedTextFillDetail = formatColorControlDetail(displayedTextColor, {
+    mixed: textInspector.isEditing && displayedTextStyles?.textColor === null,
+    transparentLabel: '透明填充',
+  })
+  const displayedTextStrokeDetail = formatColorControlDetail(displayedTextStrokeColor, {
+    mixed: textInspector.isEditing && displayedTextStyles?.textStrokeColor === null,
+    transparentLabel: displayedTextStrokeWidth > 0 ? '透明描边' : '未启用',
+  })
+  const displayedTextStrokeWidthLabel = textInspector.isEditing && displayedTextStyles?.textStrokeWidth === null ? '混合' : undefined
+  const displayedLetterSpacingLabel = textInspector.isEditing && displayedTextStyles?.letterSpacing === null ? '混合' : undefined
+  const displayedLineHeightLabel = textInspector.isEditing && displayedTextStyles?.lineHeight === null ? '混合' : undefined
+  const displayedTextStrokeEnabled = displayedTextStrokeWidth > 0
+  const displayedMargin = {
+    top: activeBlock?.appearance.marginTop ?? 0,
+    right: activeBlock?.appearance.marginRight ?? 0,
+    bottom: activeBlock?.appearance.marginBottom ?? 0,
+    left: activeBlock?.appearance.marginLeft ?? 0,
+  }
+  const displayedPadding = {
+    top: activeBlock?.appearance.paddingTop ?? 0,
+    right: activeBlock?.appearance.paddingRight ?? 0,
+    bottom: activeBlock?.appearance.paddingBottom ?? 0,
+    left: activeBlock?.appearance.paddingLeft ?? 0,
+  }
+  const blockTextDecorationTokens = parseTextDecorationTokens(activeBlock?.appearance.textDecoration ?? 'none')
+  const toolbarSelection = textInspector.isEditing
+    ? [
+        displayedTextStyles?.isBold ? 'bold' : '',
+        displayedTextStyles?.isItalic ? 'italic' : '',
+        displayedTextStyles?.isUnderline ? 'underline' : '',
+        displayedTextStyles?.isStrikeThrough ? 'line-through' : '',
+      ].filter(Boolean)
+    : [
+        activeBlock?.appearance.fontWeight === 'bold' ? 'bold' : '',
+        activeBlock?.appearance.fontStyle === 'italic' ? 'italic' : '',
+        blockTextDecorationTokens.has('underline') ? 'underline' : '',
+        blockTextDecorationTokens.has('line-through') ? 'line-through' : '',
+      ].filter(Boolean)
+
+  const handleTextMarkToggle = (mark: 'bold' | 'italic' | 'underline' | 'line-through') => {
+    if (!activeBlock) return
+
+    if (isInlineTextEditing) {
+      applyRichTextMark(mark, activeEditor)
+      return
+    }
+
+    // Block level fallback if no active editor
+    const nextEnabled = !toolbarSelection.includes(mark)
+    if (mark === 'bold') {
+      updApp({ fontWeight: nextEnabled ? 'bold' : 'normal' })
+    } else if (mark === 'italic') {
+      updApp({ fontStyle: nextEnabled ? 'italic' : 'normal' })
+    } else {
+      const currentTokens = parseTextDecorationTokens(activeBlock.appearance.textDecoration ?? 'none')
+      if (nextEnabled) currentTokens.add(mark)
+      else currentTokens.delete(mark)
+      updApp({ textDecoration: buildTextDecorationValue(currentTokens) })
+    }
+  }
 
   /* ── render ─────────────────────────────────────────────────────────── */
   return (
@@ -1436,13 +1936,31 @@ export function SidebarRight() {
                       <div className="kn2-section">
                         <p className="kn2-section__title">字体</p>
 
+                        {textInspector.isEditing && (
+                          <div className="kn2-text-editing-strip">
+                            <span className="kn2-text-editing-strip__eyebrow">
+                              {textInspector.hasSelection ? '正在编辑选中文字' : '正在编辑文字'}
+                            </span>
+                            <strong className="kn2-text-editing-strip__title">
+                              {textInspector.hasSelection ? '右侧控件将作用于当前选区' : '右侧控件将直接排版整个文本块'}
+                            </strong>
+                          </div>
+                        )}
+
                         {/* Font family */}
-                        <div className="kn2-select-wrap">
+                        <div className="kn2-select-wrap" onMouseDown={preventMouseFocusSteal}>
                           <select
                             className="kn2-select-mac kn2-select-native"
-                            value={activeBlock.appearance.fontFamily || 'Helvetica Neue'}
-                            onChange={(e) => updApp({ fontFamily: e.target.value })}
+                            value={displayedFontFamily}
+                            onChange={(e) => {
+                              const nextFontFamily = e.target.value
+                              if (nextFontFamily === MIXED_CONTROL_VALUE) return
+                              applyFontFamily(nextFontFamily)
+                            }}
                           >
+                            {displayedFontFamily === MIXED_CONTROL_VALUE && (
+                              <option value={MIXED_CONTROL_VALUE}>混合字体</option>
+                            )}
                             <option value="Helvetica Neue">Helvetica Neue</option>
                             <option value="PingFang SC">PingFang SC</option>
                             <option value="SF Pro Display">SF Pro Display</option>
@@ -1456,12 +1974,19 @@ export function SidebarRight() {
 
                         {/* Weight + size in one row */}
                         <div className="kn2-font-row" style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                          <div className="kn2-select-wrap" style={{ flex: 1 }}>
+                          <div className="kn2-select-wrap" style={{ flex: 1 }} onMouseDown={preventMouseFocusSteal}>
                             <select
                               className="kn2-select-mac kn2-select-native"
-                              value={activeBlock.appearance.fontWeight || 'normal'}
-                              onChange={(e) => updApp({ fontWeight: e.target.value })}
+                              value={displayedFontWeight}
+                              onChange={(e) => {
+                                const nextFontWeight = e.target.value
+                                if (nextFontWeight === MIXED_CONTROL_VALUE) return
+                                applyFontWeight(nextFontWeight)
+                              }}
                             >
+                              {displayedFontWeight === MIXED_CONTROL_VALUE && (
+                                <option value={MIXED_CONTROL_VALUE}>混合字重</option>
+                              )}
                               <option value="300">细体</option>
                               <option value="normal">常规</option>
                               <option value="500">中等</option>
@@ -1472,17 +1997,19 @@ export function SidebarRight() {
                             <ChevronDown className="kn2-select-chevron" />
                           </div>
                           <StepperInput
-                            value={activeBlock.appearance.fontSize}
+                            value={displayedFontSize}
                             onChange={applyFontSize}
                             min={1}
                             max={999}
                             suffix="pt"
                             width={82}
+                            displayValue={displayedFontSizeLabel}
+                            liveOnInput={textInspector.isEditing}
                           />
                         </div>
 
-                        {/* B / I / U / S toolbar + Color */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+                        {/* B / I / U / S toolbar */}
+                        <div style={{ marginTop: 12 }}>
                           <KNPillGroup<string>
                             options={[
                               { value: 'bold', icon: <Bold size={14} strokeWidth={2.5} />, label: '粗体' },
@@ -1490,33 +2017,75 @@ export function SidebarRight() {
                               { value: 'underline', icon: <Underline size={14} strokeWidth={2.5} />, label: '下划线' },
                               { value: 'line-through', icon: <Strikethrough size={14} strokeWidth={2.5} />, label: '删除线' },
                             ]}
-                            value={[
-                              activeBlock.appearance.fontWeight === 'bold' ? 'bold' : '',
-                              activeBlock.appearance.fontStyle === 'italic' ? 'italic' : '',
-                              activeBlock.appearance.textDecoration === 'underline' ? 'underline' : '',
-                              activeBlock.appearance.textDecoration === 'line-through' ? 'line-through' : '',
-                            ].filter(Boolean)}
-                            onChange={(cmd) => {
-                              if (cmd === 'bold') {
-                                runRichTextCommand('bold')
-                                updApp({ fontWeight: activeBlock.appearance.fontWeight === 'bold' ? 'normal' : 'bold' })
-                              } else if (cmd === 'italic') {
-                                runRichTextCommand('italic')
-                                updApp({ fontStyle: activeBlock.appearance.fontStyle === 'italic' ? 'normal' : 'italic' })
-                              } else if (cmd === 'underline') {
-                                runRichTextCommand('underline')
-                                updApp({ textDecoration: activeBlock.appearance.textDecoration === 'underline' ? 'none' : 'underline' })
-                              } else if (cmd === 'line-through') {
-                                runRichTextCommand('strikeThrough')
-                                updApp({ textDecoration: activeBlock.appearance.textDecoration === 'line-through' ? 'none' : 'line-through' })
-                              }
-                            }}
+                            value={toolbarSelection}
+                            onChange={(cmd) => handleTextMarkToggle(cmd as 'bold' | 'italic' | 'underline' | 'line-through')}
                           />
-                          <ColorSwatch
-                            value={normalizeColor(activeBlock.appearance.textColor)}
-                            onChange={(v) => updApp({ textColor: v })}
-                            label="text"
-                          />
+                        </div>
+                      </div>
+
+                      <Divider />
+
+                      <div className="kn2-section">
+                        <p className="kn2-section__title">文字外观</p>
+                        <div className="kn2-text-paint-stack" onMouseDown={preventMouseFocusSteal}>
+                          <div>
+                            <ColorSwatch
+                              value={displayedTextColor}
+                              onChange={applyTextFill}
+                              label="text-fill"
+                              triggerVariant="field"
+                              triggerLabel="填充"
+                              triggerDetail={displayedTextFillDetail}
+                            />
+                          </div>
+
+                          <div className="kn2-text-paint-head">
+                            <span className="kn2-text-paint-label">描边</span>
+                            <Toggle
+                              checked={displayedTextStrokeEnabled}
+                              onChange={() => {
+                                if (displayedTextStrokeEnabled) {
+                                  applyTextStroke({ width: 0 })
+                                  return
+                                }
+
+                                applyTextStroke({
+                                  width: Math.max(1, Math.round(displayedTextStrokeWidth) || 1),
+                                })
+                              }}
+                            />
+                          </div>
+
+                          {displayedTextStrokeEnabled && (
+                            <div className="kn2-text-paint-body">
+                              <ColorSwatch
+                                value={displayedTextStrokeColor}
+                                onChange={(value) => applyTextStroke({
+                                  color: value,
+                                  width: Math.max(1, displayedTextStrokeWidth || 1),
+                                })}
+                                label="text-stroke"
+                                allowGradient={false}
+                                triggerVariant="field"
+                                triggerLabel="描边颜色"
+                                triggerDetail={displayedTextStrokeDetail}
+                              />
+
+                              <div className="kn2-text-paint-row">
+                                <span className="kn2-text-paint-label">粗细</span>
+                                <StepperInput
+                                  value={displayedTextStrokeWidth}
+                                  onChange={(value) => applyTextStroke({ width: value })}
+                                  min={0}
+                                  max={24}
+                                  suffix="pt"
+                                  width={86}
+                                  displayValue={displayedTextStrokeWidthLabel}
+                                  liveOnInput={textInspector.isEditing}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -1525,7 +2094,7 @@ export function SidebarRight() {
                       <div className="kn2-section">
                         <p className="kn2-section__title">对齐方式</p>
 
-                        <div className="kn2-align-groups">
+                        <div className="kn2-align-groups" onMouseDown={preventMouseFocusSteal}>
                           <KNPillGroup
                             options={[
                               { value: 'left', icon: <AlignLeft size={14} />, label: '左对齐' },
@@ -1534,12 +2103,8 @@ export function SidebarRight() {
                               { value: 'justify', icon: <AlignJustify size={14} />, label: '两端对齐' },
                             ]}
                             stretch
-                            value={activeBlock.appearance.textAlign || 'left'}
-                            onChange={(val) => {
-                              const cmds: Record<string, string> = { left: 'justifyLeft', center: 'justifyCenter', right: 'justifyRight', justify: 'justifyFull' }
-                              runRichTextCommand(cmds[val as string])
-                              updApp({ textAlign: val as typeof activeBlock.appearance.textAlign })
-                            }}
+                            value={displayedTextAlign}
+                            onChange={(val) => applyTextAlign(val as NonNullable<typeof activeBlock.appearance.textAlign>)}
                           />
                           <KNPillGroup
                             options={[
@@ -1558,18 +2123,22 @@ export function SidebarRight() {
 
                       <div className="kn2-section">
                         <p className="kn2-section__title">间距</p>
-                        <div className="kn2-spacing-grid">
+                        <div className="kn2-spacing-grid" onMouseDown={preventMouseFocusSteal}>
                           <KNSliderRow
                             label="字距"
-                            value={activeBlock.appearance.letterSpacing ?? 0}
+                            value={displayedLetterSpacing}
                             min={-2} max={10} step={0.5} unit="pt"
-                            onChange={(v) => updApp({ letterSpacing: v })}
+                            onChange={applyLetterSpacing}
+                            displayValue={displayedLetterSpacingLabel}
+                            liveOnInput={textInspector.isEditing}
                           />
                           <KNSliderRow
                             label="行距"
-                            value={activeBlock.appearance.lineHeight ?? 1.4}
+                            value={displayedLineHeight}
                             min={0} max={3} step={0.1}
-                            onChange={(v) => updApp({ lineHeight: v })}
+                            onChange={applyLineHeight}
+                            displayValue={displayedLineHeightLabel}
+                            liveOnInput={textInspector.isEditing}
                           />
                         </div>
                       </div>
@@ -1582,7 +2151,7 @@ export function SidebarRight() {
                       {/* ── Fill ─────────────────────────────────────── */}
                       <KNPanel title="填充">
                         <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          <div className="kn2-select-wrap">
+                          <div className="kn2-select-wrap" onMouseDown={preventMouseFocusSteal}>
                             <select
                               className="kn2-select-mac kn2-select-native"
                               value={activeBlock.appearance.fillType ?? 'none'}
@@ -1620,7 +2189,7 @@ export function SidebarRight() {
                         defaultOpen={activeBlock.appearance.strokeStyle && activeBlock.appearance.strokeStyle !== 'none'}
                       >
                         <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          <div className="kn2-select-wrap">
+                          <div className="kn2-select-wrap" onMouseDown={preventMouseFocusSteal}>
                             <select
                               className="kn2-select-mac kn2-select-native"
                               value={activeBlock.appearance.strokeStyle ?? 'none'}
@@ -1668,7 +2237,7 @@ export function SidebarRight() {
                         defaultOpen={!!activeBlock.appearance.shadow}
                       >
                         <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          <div className="kn2-select-wrap">
+                          <div className="kn2-select-wrap" onMouseDown={preventMouseFocusSteal}>
                             <select className="kn2-select-mac kn2-select-native" defaultValue="drop">
                               <option value="drop">投影</option>
                               <option value="contact">接触阴影</option>
@@ -1726,6 +2295,35 @@ export function SidebarRight() {
                             value={activeBlock.appearance.radius}
                             min={0} max={80} step={1} unit="pt"
                             onChange={(v) => updApp({ radius: v })}
+                          />
+                        </div>
+                      </KNPanel>
+
+                      <KNPanel title="盒模型">
+                        <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                          <BoxModelControl
+                            title="外边距"
+                            values={displayedMargin}
+                            onChange={(updates) => {
+                              const patch: Partial<EditorBlock['appearance']> = {}
+                              if (updates.top !== undefined) patch.marginTop = updates.top
+                              if (updates.right !== undefined) patch.marginRight = updates.right
+                              if (updates.bottom !== undefined) patch.marginBottom = updates.bottom
+                              if (updates.left !== undefined) patch.marginLeft = updates.left
+                              updApp(patch)
+                            }}
+                          />
+                          <BoxModelControl
+                            title="内边距"
+                            values={displayedPadding}
+                            onChange={(updates) => {
+                              const patch: Partial<EditorBlock['appearance']> = {}
+                              if (updates.top !== undefined) patch.paddingTop = updates.top
+                              if (updates.right !== undefined) patch.paddingRight = updates.right
+                              if (updates.bottom !== undefined) patch.paddingBottom = updates.bottom
+                              if (updates.left !== undefined) patch.paddingLeft = updates.left
+                              updApp(patch)
+                            }}
                           />
                         </div>
                       </KNPanel>

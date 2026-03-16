@@ -85,8 +85,18 @@ const baseAppearance = (textColor = '#f7f7fb'): BlockAppearance => ({
   strokeWidth: 1,
   strokeStyle: 'solid',
   radius: 24,
+  marginTop: 0,
+  marginRight: 0,
+  marginBottom: 0,
+  marginLeft: 0,
+  paddingTop: 0,
+  paddingRight: 0,
+  paddingBottom: 0,
+  paddingLeft: 0,
   shadow: true,
   textColor,
+  textStrokeColor: 'transparent',
+  textStrokeWidth: 0,
   fontSize: 28,
   textAlign: 'left',
   fontFamily: 'Helvetica Neue',
@@ -103,8 +113,18 @@ const baseTextAppearance = (textColor = '#f8fafc'): BlockAppearance => ({
   strokeWidth: 0,
   strokeStyle: 'none',
   radius: 0,
+  marginTop: 0,
+  marginRight: 0,
+  marginBottom: 0,
+  marginLeft: 0,
+  paddingTop: 0,
+  paddingRight: 0,
+  paddingBottom: 0,
+  paddingLeft: 0,
   shadow: false,
   textColor,
+  textStrokeColor: 'transparent',
+  textStrokeWidth: 0,
   fontSize: 28,
   textAlign: 'left',
   fontFamily: 'Helvetica Neue',
@@ -887,13 +907,27 @@ export function createDemoPresentation(): PresentationSnapshot {
 }
 
 function normalizeBlockAppearance(block: EditorBlock): EditorBlock {
+  const boxModel = {
+    marginTop: block.appearance.marginTop ?? 0,
+    marginRight: block.appearance.marginRight ?? 0,
+    marginBottom: block.appearance.marginBottom ?? 0,
+    marginLeft: block.appearance.marginLeft ?? 0,
+    paddingTop: block.appearance.paddingTop ?? 0,
+    paddingRight: block.appearance.paddingRight ?? 0,
+    paddingBottom: block.appearance.paddingBottom ?? 0,
+    paddingLeft: block.appearance.paddingLeft ?? 0,
+  }
+
   if (!['heading', 'subheading', 'body'].includes(block.type)) {
     return {
       ...block,
       appearance: {
         ...block.appearance,
+        ...boxModel,
         fillType: block.appearance.fillType ?? (block.appearance.fill.startsWith('linear-gradient') ? 'gradient' : 'color'),
         strokeStyle: block.appearance.strokeStyle ?? (block.appearance.strokeWidth > 0 ? 'solid' : 'none'),
+        textStrokeColor: block.appearance.textStrokeColor ?? 'transparent',
+        textStrokeWidth: block.appearance.textStrokeWidth ?? 0,
       },
     }
   }
@@ -902,6 +936,7 @@ function normalizeBlockAppearance(block: EditorBlock): EditorBlock {
   const isLegacyTextBlock = appearance.fillType === undefined
   const normalized: BlockAppearance = {
     ...appearance,
+    ...boxModel,
     fillType: isLegacyTextBlock ? 'none' : appearance.fillType ?? 'none',
     fill: isLegacyTextBlock ? 'transparent' : appearance.fill,
     strokeStyle: isLegacyTextBlock ? 'none' : appearance.strokeStyle ?? 'none',
@@ -909,6 +944,8 @@ function normalizeBlockAppearance(block: EditorBlock): EditorBlock {
     strokeWidth: isLegacyTextBlock ? 0 : appearance.strokeWidth,
     radius: isLegacyTextBlock ? 0 : appearance.radius,
     shadow: isLegacyTextBlock ? false : appearance.shadow,
+    textStrokeColor: appearance.textStrokeColor ?? 'transparent',
+    textStrokeWidth: appearance.textStrokeWidth ?? 0,
   }
 
   if (block.type === 'heading') {
@@ -942,11 +979,19 @@ function normalizeBlockAppearance(block: EditorBlock): EditorBlock {
 }
 
 export function normalizePresentationSnapshot(snapshot: PresentationSnapshot): PresentationSnapshot {
+  const slides = snapshot.slides.map((slide) => normalizeSlideAnimations({
+    ...slide,
+    blocks: slide.blocks.map((block) => normalizeBlockAppearance(block)),
+  }))
+
+  // Ensure currentSlideId is always valid — fall back to first slide if stale or null.
+  const currentSlideId = slides.some((s) => s.id === snapshot.currentSlideId)
+    ? snapshot.currentSlideId
+    : (slides[0]?.id ?? null)
+
   return {
     ...snapshot,
-    slides: snapshot.slides.map((slide) => normalizeSlideAnimations({
-      ...slide,
-      blocks: slide.blocks.map((block) => normalizeBlockAppearance(block)),
-    })),
+    slides,
+    currentSlideId,
   }
 }

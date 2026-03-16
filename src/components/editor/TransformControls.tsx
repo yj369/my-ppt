@@ -305,8 +305,7 @@ export function TransformControls({
       const target = event.target as HTMLElement
       if (
         target.classList.contains('resize-handle') ||
-        target.classList.contains('rotate-handle') ||
-        target.closest('.block-chip')
+        target.classList.contains('rotate-handle')
       ) {
         return
       }

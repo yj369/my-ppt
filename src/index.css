@@ -2,6 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
+/* TipTap / ProseMirror Core Styles */
+.ProseMirror {
+  outline: none;
+  width: 100%;
+  height: 100%;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #adb5bd;
+  pointer-events: none;
+  height: 0;
+}
+
+/* Ensure vertical alignment works in TipTap container */
+.kn2-tiptap-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: inherit;
+  align-items: inherit;
+  width: 100%;
+  min-height: 100%;
+}
+
+.ProseMirror p {
+  margin: 0;
+  padding: 0;
+}
+
+/* Inherit block styles if not explicitly set in TipTap */
+.ProseMirror {
+  font-family: var(--block-text-font-family, inherit);
+  font-size: var(--block-text-font-size, inherit);
+  line-height: var(--block-text-line-height, normal);
+  letter-spacing: var(--block-text-letter-spacing, normal);
+  font-weight: var(--block-text-font-weight, normal);
+  font-style: var(--block-text-font-style, normal);
+  text-decoration: var(--block-text-decoration, none);
+  text-align: inherit;
+}
+
+.ProseMirror h1 {
+  margin: 0;
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  font-family: inherit;
+  letter-spacing: inherit;
+  text-decoration: inherit;
+  color: inherit;
+}
+
+.ProseMirror ul {
+  margin: 18px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 10px;
+  list-style-type: disc;
+}
+
+.ProseMirror blockquote {
+  margin: 0;
+  border-left: 3px solid var(--accent);
+  padding-left: 16px;
+  font-style: italic;
+}
+
 :root {
   --app-bg: #e9eaee;
   --chrome: #f6f6f8;
@@ -708,14 +779,26 @@ textarea {
 
 .editor-block [contenteditable='true'] {
   user-select: text;
+  cursor: text;
 }
 
 .editor-block.is-editing {
   cursor: text;
+  outline-color: rgba(10, 132, 255, 0.38);
+  box-shadow: 0 0 0 1px rgba(10, 132, 255, 0.14);
 }
 
 .editor-block.is-draggable {
   cursor: move;
+}
+
+.editor-block.is-editing.is-draggable {
+  cursor: text;
+}
+
+.editor-block.is-editing .tpl-wrapper .kn2-rich-text::selection,
+.editor-block.is-editing .tpl-wrapper [contenteditable='true']::selection {
+  background: rgba(10, 132, 255, 0.2);
 }
 
 .editor-block.is-locked::after {
@@ -739,6 +822,7 @@ body.play-mode .editor-block {
 .tpl-wrapper {
   width: 100%;
   height: 100%;
+  /* Default text color from the slide theme. Block-level `style.color` set by React overrides this. */
   color: var(--slide-text);
   /* Simple blocks (heading/subheading/body/divider/shape/eyebrow) read box styles here.
      Surface blocks (.kn-surface etc.) inside will override with their own background. */
@@ -754,11 +838,38 @@ body.play-mode .editor-block {
   opacity: var(--block-opacity, 1);
 }
 
-.tpl-wrapper [contenteditable='true'] {
+.tpl-wrapper [contenteditable='true'],
+.tpl-wrapper .kn2-rich-text {
   outline: none;
+  width: 100%;
+  /* Explicitly inherit from the flex parent so inherited props cross the boundary */
+  color: inherit;
+  -webkit-text-fill-color: inherit;
+  font-size: inherit;
+  font-family: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  text-decoration: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  text-align: inherit;
 }
 
-.tpl-wrapper--text-gradient [contenteditable] {
+.tpl-wrapper [contenteditable],
+.tpl-wrapper .kn2-rich-text {
+  -webkit-text-stroke-color: var(--block-text-stroke-color, transparent);
+  -webkit-text-stroke-width: var(--block-text-stroke-width, 0px);
+  paint-order: stroke fill;
+}
+
+.editor-block.is-text-block.is-editing {
+  /* Minimal background tint during editing, mostly rely on the outline from .is-editing */
+  background: rgba(10, 132, 255, 0.02);
+  border-radius: 10px;
+}
+
+.tpl-wrapper--text-gradient [contenteditable],
+.tpl-wrapper--text-gradient .kn2-rich-text {
   background-image: var(--block-text-gradient, none);
   -webkit-background-clip: text;
   background-clip: text;
@@ -1165,21 +1276,18 @@ body.play-mode .editor-block {
 
 .editor-block.is-primary-selected .resize-handle,
 .editor-block.is-primary-selected .rotate-handle,
-.editor-block.is-primary-selected .rotate-link,
-.editor-block.is-primary-selected .block-chip-group {
+.editor-block.is-primary-selected .rotate-link {
   opacity: 1;
 }
 
 .editor-block.is-primary-selected .resize-handle,
-.editor-block.is-primary-selected .rotate-handle,
-.editor-block.is-primary-selected .block-chip-group {
+.editor-block.is-primary-selected .rotate-handle {
   pointer-events: auto;
 }
 
 .resize-handle,
 .rotate-handle,
-.rotate-link,
-.block-chip-group {
+.rotate-link {
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms ease;
@@ -1247,26 +1355,6 @@ body.play-mode .editor-block {
 .rotate-handle {
   left: calc(50% - 5px);
   top: -30px;
-}
-
-.block-chip-group {
-  position: absolute;
-  top: -40px;
-  left: 0;
-  display: inline-flex;
-  gap: 8px;
-}
-
-.block-chip {
-  padding: 7px 10px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  font-size: 12px;
-}
-
-.block-chip--danger {
-  color: #b42318;
 }
 
 .zoom-toolbar {
@@ -2933,9 +3021,58 @@ body.play-mode .editor-block {
 
 body.play-mode .resize-handle,
 body.play-mode .rotate-handle,
-body.play-mode .rotate-link,
-body.play-mode .block-chip-group {
+body.play-mode .rotate-link {
   display: none !important;
+}
+
+.kn2-box-model {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kn2-box-model__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--kn2-ink-3);
+}
+
+.kn2-box-model__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.kn2-link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--kn2-ink-3);
+  transition: all 0.15s ease;
+  background: transparent;
+}
+
+.kn2-link-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--kn2-ink);
+}
+
+.kn2-link-btn--active {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--kn2-ink);
+}
+
+.kn2-box-model__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 8px;
+}
+
+.kn2-box-model__field {
+  display: block;
 }
 
 .play-hud {
@@ -3749,6 +3886,64 @@ body.play-mode .block-chip-group {
   gap: 6px;
 }
 
+.kn2-text-editing-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(10, 132, 255, 0.08), rgba(10, 132, 255, 0.035));
+  border: 1px solid rgba(10, 132, 255, 0.14);
+}
+
+.kn2-text-editing-strip__eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(8, 105, 203, 0.72);
+}
+
+.kn2-text-editing-strip__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--kn2-ink-2);
+}
+
+.kn2-text-paint-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.kn2-text-paint-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kn2-text-paint-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--kn2-ink-2);
+}
+
+.kn2-text-paint-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kn2-text-paint-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
 /* ── Stepper Input ─────────────────────────────────────────────────────── */
 .kn2-stepper {
   display: flex;
@@ -3762,6 +3957,15 @@ body.play-mode .block-chip-group {
   flex: none;
 }
 
+.kn2-stepper__prefix {
+  font-size: 11px;
+  color: var(--kn2-ink-3);
+  padding-left: 8px;
+  padding-top: 1px;
+  pointer-events: none;
+  flex: none;
+}
+
 .kn2-stepper__input {
   width: 100%;
   min-width: 0;
@@ -3771,7 +3975,7 @@ body.play-mode .block-chip-group {
   font-size: 13px;
   font-weight: 500;
   color: var(--kn2-ink);
-  padding: 0 4px 0 8px;
+  padding: 0 4px 0 4px; /* Reduced left padding to account for prefix */
   -moz-appearance: textfield;
   appearance: textfield;
 }

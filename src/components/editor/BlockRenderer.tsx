@@ -1,8 +1,7 @@
 import type { CSSProperties } from 'react'
-import { useEffect, useEffectEvent, useRef } from 'react'
 import { parseCssColor } from '../../lib/colors'
 import type { EditorBlock } from '../../types/editor'
-import { useEditorStore } from '../../store'
+import { TipTapEditor } from './TipTapEditor'
 
 type BlockRendererProps = {
   block: EditorBlock
@@ -19,6 +18,8 @@ type BlockStyle = CSSProperties & Record<
   | '--block-shadow'
   | '--block-opacity'
   | '--block-text-gradient'
+  | '--block-text-stroke-color'
+  | '--block-text-stroke-width'
   | '--block-text-font-size'
   | '--block-text-line-height'
   | '--block-text-letter-spacing'
@@ -30,67 +31,15 @@ type BlockStyle = CSSProperties & Record<
 >
 
 export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps) {
-  const contentRef = useRef<HTMLDivElement>(null)
-  const lastSavedContentRef = useRef(block.content)
-  const updateBlock = useEditorStore((state) => state.updateBlock)
-  const persistContent = useEffectEvent(() => {
-    const wrapper = contentRef.current
-    if (!wrapper) return
-
-    const currentHtml = wrapper.innerHTML
-    if (currentHtml !== block.content) {
-      updateBlock(slideId, block.id, { content: currentHtml })
-      lastSavedContentRef.current = currentHtml
-    }
-  })
-
-  // 1. Synchronize external content changes into DOM when NOT editing
-  useEffect(() => {
-    if (!contentRef.current) return
-    if (!isEditing && block.content !== lastSavedContentRef.current) {
-      contentRef.current.innerHTML = block.content
-      lastSavedContentRef.current = block.content
-    }
-  }, [block.content, isEditing])
-
-  // 2. Initialize DOM exactly once on mount
-  useEffect(() => {
-    if (contentRef.current && contentRef.current.innerHTML === '') {
-      contentRef.current.innerHTML = block.content
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // 3. Make nodes editable and listen for blur to save
-  useEffect(() => {
-    const wrapper = contentRef.current
-    if (!wrapper) return
-
-    const editableNodes = wrapper.querySelectorAll<HTMLElement>('[contenteditable]')
-    const targets = editableNodes.length > 0 ? Array.from(editableNodes) : [wrapper]
-
-    targets.forEach((node, index) => {
-      node.setAttribute('contenteditable', isEditing ? 'true' : 'false')
-      if (isEditing) {
-        node.addEventListener('blur', persistContent, { once: true })
-        if (index === 0) node.focus()
-      } else {
-        node.removeEventListener('blur', persistContent)
-      }
-    })
-
-    return () => { targets.forEach((node) => node.removeEventListener('blur', persistContent)) }
-  }, [isEditing])
-
-  useEffect(() => {
-    if (!isEditing) {
-      persistContent()
-    }
-  }, [isEditing])
-
-  useEffect(() => () => persistContent(), [])
-
   const { appearance } = block
+  const marginTop = Math.max(0, appearance.marginTop ?? 0)
+  const marginRight = Math.max(0, appearance.marginRight ?? 0)
+  const marginBottom = Math.max(0, appearance.marginBottom ?? 0)
+  const marginLeft = Math.max(0, appearance.marginLeft ?? 0)
+  const paddingTop = Math.max(0, appearance.paddingTop ?? 0)
+  const paddingRight = Math.max(0, appearance.paddingRight ?? 0)
+  const paddingBottom = Math.max(0, appearance.paddingBottom ?? 0)
+  const paddingLeft = Math.max(0, appearance.paddingLeft ?? 0)
 
   // Compute flip transform
   const flipScale = [
@@ -127,6 +76,14 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
     letterSpacing: appearance.letterSpacing != null ? `${appearance.letterSpacing}px` : undefined,
     lineHeight: appearance.lineHeight != null ? String(appearance.lineHeight) : undefined,
     // Layout
+    position: 'absolute',
+    top: `${marginTop}px`,
+    right: `${marginRight}px`,
+    bottom: `${marginBottom}px`,
+    left: `${marginLeft}px`,
+    width: 'auto',
+    height: 'auto',
+    boxSizing: 'border-box',
     display: 'flex',
     flexDirection: 'column',
     justifyContent:
@@ -135,6 +92,10 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
         : appearance.verticalAlign === 'bottom'
         ? 'flex-end'
         : 'flex-start',
+    paddingTop: `${paddingTop}px`,
+    paddingRight: `${paddingRight}px`,
+    paddingBottom: `${paddingBottom}px`,
+    paddingLeft: `${paddingLeft}px`,
     // Flip
     transform: flipScale || undefined,
     // CSS vars
@@ -146,6 +107,8 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
     '--block-shadow': shadowValue || 'none',
     '--block-opacity': String(appearance.fillOpacity ?? 1),
     '--block-text-gradient': isTextGradient ? appearance.textColor : 'none',
+    '--block-text-stroke-color': appearance.textStrokeColor ?? 'transparent',
+    '--block-text-stroke-width': `${appearance.textStrokeWidth ?? 0}px`,
     '--block-text-font-size': `${appearance.fontSize}px`,
     '--block-text-line-height': appearance.lineHeight != null ? String(appearance.lineHeight) : 'normal',
     '--block-text-letter-spacing': appearance.letterSpacing != null ? `${appearance.letterSpacing}px` : 'normal',
@@ -155,14 +118,13 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
     '--block-text-font-family': appearance.fontFamily ?? 'inherit',
   }
 
-
-
   return (
     <div
-      ref={contentRef}
       className={`tpl-wrapper tpl-wrapper--${block.type} ${isTextGradient ? 'tpl-wrapper--text-gradient' : ''}`.trim()}
       style={style}
-    />
+    >
+      <TipTapEditor block={block} slideId={slideId} isEditing={isEditing} />
+    </div>
   )
 }
 

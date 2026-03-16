@@ -16,6 +16,7 @@ type BlockStyle = CSSProperties & Record<
   | '--block-stroke-style'
   | '--block-radius'
   | '--block-clip-path'
+  | '--block-mask-image'
   | '--block-shadow'
   | '--block-opacity'
   | '--block-text-gradient'
@@ -68,6 +69,8 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
   let computedRadius = `${appearance.radius ?? 0}px`
   let computedClipPath = 'none'
 
+  let computedMaskImage: string | undefined
+
   if (block.type === 'shape-rect') {
     computedRadius = '0px'
   } else if (block.type === 'shape-circle') {
@@ -78,6 +81,52 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
   } else if (block.type === 'shape-diamond') {
     computedRadius = '0px'
     computedClipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'
+  } else if (block.type === 'shape-pentagon') {
+    computedRadius = '0px'
+    computedClipPath = 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)'
+  } else if (block.type === 'shape-star') {
+    computedRadius = '0px'
+    computedClipPath = 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)'
+  } else if (block.type === 'shape-arrow-right') {
+    computedRadius = '0px'
+    computedClipPath = 'polygon(0% 25%, 65% 25%, 65% 0%, 100% 50%, 65% 100%, 65% 75%, 0% 75%)'
+  } else if (block.type === 'shape-arrow-double') {
+    computedRadius = '0px'
+    computedClipPath = 'polygon(0% 50%, 25% 0%, 25% 25%, 75% 25%, 75% 0%, 100% 50%, 75% 100%, 75% 75%, 25% 75%, 25% 100%)'
+  } else if (block.type === 'shape-callout-oval') {
+    computedRadius = '0px'
+    // Dynamic SVG mask for perfect curves:
+    // Oval body taking up top 85% of height, with a custom tail path at the bottom left.
+    const w = block.width
+    const h = block.height
+    const cx = w / 2
+    const cy = h * 0.425
+    const rx = w / 2
+    const ry = h * 0.425
+    // Tail from bottom left of oval fading down to pure bottom left point, then back up.
+    const tailSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+        <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="black" />
+        <path d="M ${w * 0.15} ${h * 0.7} Q ${w * 0.1} ${h * 0.85} ${w * 0.05} ${h * 0.95} Q ${w * 0.15} ${h * 0.9} ${w * 0.3} ${h * 0.8}" fill="black" />
+      </svg>
+    `.replace(/\s+/g, ' ').trim()
+    computedMaskImage = `url("data:image/svg+xml;utf8,${encodeURIComponent(tailSvg)}")`
+  } else if (block.type === 'shape-callout-rect') {
+    computedRadius = '0px'
+    const w = block.width
+    const h = block.height
+    const r = 16 // Corner radius
+    const tailW = Math.min(24, w * 0.15) // Tail width (left side)
+    const tailH = Math.min(32, h * 0.4)  // Tail height
+    const tailY = h / 2
+    const bodyW = w - tailW
+    const tailSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+        <rect x="${tailW}" y="0" width="${bodyW}" height="${h}" rx="${r}" ry="${r}" fill="black" />
+        <polygon points="${tailW},${tailY - tailH/2} 0,${tailY} ${tailW},${tailY + tailH/2}" fill="black" />
+      </svg>
+    `.replace(/\s+/g, ' ').trim()
+    computedMaskImage = `url("data:image/svg+xml;utf8,${encodeURIComponent(tailSvg)}")`
   }
 
   // Pass everything through CSS custom properties.
@@ -122,6 +171,7 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
     '--block-stroke-style': appearance.strokeStyle || 'none',
     '--block-radius': computedRadius,
     '--block-clip-path': computedClipPath,
+    '--block-mask-image': computedMaskImage || 'none',
     '--block-shadow': shadowValue || 'none',
     '--block-opacity': String(appearance.fillOpacity ?? 1),
     '--block-text-gradient': isTextGradient ? appearance.textColor : 'none',

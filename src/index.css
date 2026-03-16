@@ -904,6 +904,12 @@ body.play-mode .editor-block {
   
   border-radius: var(--block-radius, 0);
   clip-path: var(--block-clip-path, none);
+  -webkit-mask-image: var(--block-mask-image, none);
+  mask-image: var(--block-mask-image, none);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
   box-shadow: var(--block-shadow, none);
   opacity: var(--block-opacity, 1);
 }
@@ -974,6 +980,18 @@ body.play-mode .editor-block {
   border: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
+}
+
+/* Note: Oval and Rectangular Callout shaping is now handled dynamically via --block-mask-image SVG data URIs injected by BlockRenderer.tsx. This ensures pixel-perfect scalable curves without transparency overlaps. */
+
+/* For masked elements, box-shadow gets clipped. We must swap to filter: drop-shadow */
+.tpl-wrapper--shape-callout-oval,
+.tpl-wrapper--shape-callout-rect {
+  box-shadow: none !important;
+  /* drop-shadow syntax is identical to box-shadow but without spread/inset */
+  filter: drop-shadow(var(--block-shadow, none));
+  /* Ensure mask overflow behaves */
+  overflow: visible !important;
 }
 
 .kn-eyebrow {
@@ -1260,7 +1278,12 @@ body.play-mode .editor-block {
 .kn-shape-box,
 .kn-shape-circle,
 .kn-shape-triangle,
-.kn-shape-diamond {
+.kn-shape-diamond,
+.kn-shape-pentagon,
+.kn-shape-star,
+.kn-shape-arrow-right,
+.kn-shape-arrow-double,
+.kn-shape-callout {
   width: 100%;
   height: 100%;
   display: grid;
@@ -1284,6 +1307,52 @@ body.play-mode .editor-block {
 
 .kn-shape-diamond {
   clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+/* Pentagon - flat bottom regular pentagon */
+.kn-shape-pentagon {
+  clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+}
+
+/* 5-pointed Star */
+.kn-shape-star {
+  clip-path: polygon(
+    50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%,
+    50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%
+  );
+}
+
+/* Right Arrow (single direction) */
+.kn-shape-arrow-right {
+  clip-path: polygon(
+    0% 25%, 65% 25%, 65% 0%, 100% 50%,
+    65% 100%, 65% 75%, 0% 75%
+  );
+}
+
+/* Double-headed Arrow */
+.kn-shape-arrow-double {
+  clip-path: polygon(
+    0% 50%, 25% 0%, 25% 25%, 75% 25%, 75% 0%,
+    100% 50%, 75% 100%, 75% 75%, 25% 75%, 25% 100%
+  );
+}
+
+/* Callout / Speech Bubble - inner content area, transparent (wrapper does the styling) */
+.kn-shape-callout-oval,
+.kn-shape-callout-rect {
+  clip-path: none;
+  border-radius: 0;
+  background: transparent;
+  position: relative;
+  overflow: visible;
+  width: 100%;
+  height: 100%;
+}
+
+.kn-shape-callout-oval::after,
+.kn-shape-callout-rect::after {
+  display: none;
 }
 
 .kn-divider {

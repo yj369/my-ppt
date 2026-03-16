@@ -147,6 +147,38 @@ export function Toolbar() {
                     <path d="M12 2L22 12L12 22L2 12L12 2Z" />
                   </svg>
                 </button>
+                <button type="button" onClick={() => insertShapePreset('shape-pentagon')} title="五边形">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <polygon points="12,2 22,9 18,22 6,22 2,9" />
+                  </svg>
+                </button>
+                <button type="button" onClick={() => insertShapePreset('shape-star')} title="五角星">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" />
+                  </svg>
+                </button>
+                <button type="button" onClick={() => insertShapePreset('shape-arrow-right')} title="右箭头">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <polygon points="0,8 15,8 15,2 24,12 15,22 15,16 0,16" />
+                  </svg>
+                </button>
+                <button type="button" onClick={() => insertShapePreset('shape-arrow-double')} title="双向箭头">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <polygon points="0,12 6,2 6,8 18,8 18,2 24,12 18,22 18,16 6,16 6,22" />
+                  </svg>
+                </button>
+                <button type="button" onClick={() => insertShapePreset('shape-callout-oval')} title="圆角对话气泡">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <ellipse cx="12" cy="10" rx="10" ry="8" />
+                    <path d="M7 17l-3 4 1-5" />
+                  </svg>
+                </button>
+                <button type="button" onClick={() => insertShapePreset('shape-callout-rect')} title="矩形对话气泡">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="6" y="4" width="16" height="16" rx="3" />
+                    <path d="M6 10l-4 2 4 2" />
+                  </svg>
+                </button>
               </div>
             </div>
           )}

@@ -36,6 +36,12 @@ export type ElementType =
   | 'shape-circle'
   | 'shape-triangle'
   | 'shape-diamond'
+  | 'shape-pentagon'
+  | 'shape-star'
+  | 'shape-arrow-right'
+  | 'shape-arrow-double'
+  | 'shape-callout-oval'
+  | 'shape-callout-rect'
   | 'divider'
   | '3d'
 

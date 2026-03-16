@@ -84,6 +84,7 @@ export type BuildInAnimation = {
 }
 
 export type ActionAnimation = {
+  id: string
   effect: ActionAnimationType
   trigger: TriggerType
   duration: number
@@ -102,7 +103,7 @@ export type BuildOutAnimation = {
 
 export type BlockAnimations = {
   buildIn: BuildInAnimation
-  action: ActionAnimation
+  action: ActionAnimation[]
   buildOut: BuildOutAnimation
 }
 

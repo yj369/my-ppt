@@ -1,11 +1,12 @@
 import gsap from 'gsap'
 import { getBlockAnimations } from './animations'
-import type { AnimationPhase, BlockAnimations, EditorBlock } from '../types/editor'
+import type { AnimationPhase, BlockAnimations, EditorBlock, BuildInAnimation, ActionAnimation, BuildOutAnimation } from '../types/editor'
 
 export type RuntimeSequenceItem = {
   element: HTMLElement
   phase: AnimationPhase
-  animation: BlockAnimations[AnimationPhase]
+  actionId?: string
+  animation: BuildInAnimation | ActionAnimation | BuildOutAnimation
   opacity: number
 }
 
@@ -23,21 +24,35 @@ function getBaseState(block: EditorBlock) {
 
 const activeRuntimeAnimations = new WeakMap<HTMLElement, gsap.core.Animation>()
 
-function stopElementRuntime(element: HTMLElement) {
-  gsap.killTweensOf(element)
-  const runningAnimation = activeRuntimeAnimations.get(element)
-  if (runningAnimation) {
-    runningAnimation.kill()
-    activeRuntimeAnimations.delete(element)
-  }
-}
-
 function rememberRuntimeAnimation(element: HTMLElement, animation: gsap.core.Animation) {
   activeRuntimeAnimations.set(element, animation)
 }
 
+function stopElementRuntime(element: HTMLElement, phase?: AnimationPhase) {
+  if (!phase) {
+    gsap.killTweensOf(element)
+  } else {
+    // If we're starting a new phase, we might want to keep existing loops running 
+    // unless they are the same phase. For action animations, we often want multiple to stack.
+    if (phase === 'buildIn' || phase === 'buildOut') {
+      gsap.killTweensOf(element)
+    }
+  }
+  
+  const runningAnimation = activeRuntimeAnimations.get(element)
+  if (runningAnimation) {
+    // Only kill if it's a non-looping animation or if we're moving to a destructive phase like buildOut
+    const isLoop = runningAnimation.vars.repeat === -1 || (runningAnimation instanceof gsap.core.Timeline && runningAnimation.repeat() === -1)
+    if (phase === 'buildOut' || !isLoop) {
+      runningAnimation.kill()
+      activeRuntimeAnimations.delete(element)
+    }
+  }
+}
+
 export function restoreBlockAfterPreview(element: HTMLElement, block: EditorBlock) {
-  stopElementRuntime(element)
+  gsap.killTweensOf(element)
+  activeRuntimeAnimations.delete(element)
   gsap.set(element, getBaseState(block))
   gsap.set(element, {
     display: 'block',
@@ -49,7 +64,8 @@ export function restoreBlockAfterPreview(element: HTMLElement, block: EditorBloc
 export function initializeBlockForPlay(element: HTMLElement, block: EditorBlock) {
   const animations = getBlockAnimations(block)
 
-  stopElementRuntime(element)
+  gsap.killTweensOf(element)
+  activeRuntimeAnimations.delete(element)
   gsap.set(element, getBaseState(block))
 
   if (block.hidden) {
@@ -73,20 +89,37 @@ export function previewBlockPhase(
   element: HTMLElement,
   block: EditorBlock,
   phase: AnimationPhase,
+  actionId?: string,
 ) {
-  const animation = getBlockAnimations(block)[phase]
-  if (animation.effect === 'none') {
+  const animations = getBlockAnimations(block)
+  
+  let animation: any
+  if (phase === 'action') {
+    if (actionId) {
+      animation = animations.action.find(a => a.id === actionId)
+    } else {
+      animation = animations.action[0]
+    }
+  } else {
+    animation = animations[phase]
+  }
+
+  if (!animation || animation.effect === 'none') {
     return false
   }
 
   const item: RuntimeSequenceItem = {
     element,
     phase,
+    actionId,
     animation,
     opacity: block.opacity,
   }
 
-  stopElementRuntime(element)
+  // For preview, we still want to clear to have a clean start
+  gsap.killTweensOf(element)
+  activeRuntimeAnimations.delete(element)
+  
   gsap.set(element, getBaseState(block))
   gsap.set(element, { display: 'block', autoAlpha: block.opacity, pointerEvents: 'auto' })
 
@@ -105,7 +138,9 @@ function runPhaseAnimation(
   item: RuntimeSequenceItem,
   options: { preview?: boolean; restoreAfterBuildOut?: boolean } = {},
 ) {
-  stopElementRuntime(item.element)
+  if (!options.preview) {
+    stopElementRuntime(item.element, item.phase)
+  }
 
   if (item.phase === 'buildIn') {
     animateBuildIn(item)
@@ -181,7 +216,7 @@ function animateBuildIn(item: RuntimeSequenceItem) {
 
 function animateAction(item: RuntimeSequenceItem) {
   const { element } = item
-  const animation = item.animation as BlockAnimations['action']
+  const animation = item.animation as ActionAnimation
   const half = Math.max(animation.duration / 2, 0.1)
   const repeatCount = animation.loop ? -1 : 1
   const timelineRepeat = animation.loop ? -1 : 0
@@ -190,7 +225,7 @@ function animateAction(item: RuntimeSequenceItem) {
     rememberRuntimeAnimation(element, gsap.fromTo(
       element,
       { scale: 1 },
-      { scale: 1.08, duration: half, delay: animation.delay, ease: 'power1.inOut', yoyo: true, repeat: repeatCount },
+      { scale: 1.08, duration: half, delay: animation.delay, ease: 'power1.inOut', yoyo: true, repeat: repeatCount, overwrite: false },
     ))
     return
   }
@@ -199,7 +234,7 @@ function animateAction(item: RuntimeSequenceItem) {
     rememberRuntimeAnimation(element, gsap.fromTo(
       element,
       { y: 0 },
-      { y: -18, duration: half, delay: animation.delay, ease: 'power2.out', yoyo: true, repeat: repeatCount },
+      { y: -18, duration: half, delay: animation.delay, ease: 'power2.out', yoyo: true, repeat: repeatCount, overwrite: false },
     ))
     return
   }
@@ -224,6 +259,7 @@ function animateAction(item: RuntimeSequenceItem) {
         ease: 'power2.inOut',
         yoyo: true,
         repeat: repeatCount,
+        overwrite: false,
       },
     ))
     return
@@ -233,12 +269,10 @@ function animateAction(item: RuntimeSequenceItem) {
     rememberRuntimeAnimation(element, gsap.fromTo(
       element,
       { autoAlpha: 1 },
-      { autoAlpha: 0.18, duration: half, delay: animation.delay, ease: 'power1.inOut', yoyo: true, repeat: repeatCount },
+      { autoAlpha: 0.18, duration: half, delay: animation.delay, ease: 'power1.inOut', yoyo: true, repeat: repeatCount, overwrite: false },
     ))
     return
   }
-
-  activeRuntimeAnimations.delete(element)
 }
 
 function animateBuildOut(item: RuntimeSequenceItem, restoreAfter: boolean) {

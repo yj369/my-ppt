@@ -28,6 +28,7 @@ import { previewBlockPhase, restoreBlockAfterPreview } from '../../lib/animation
 import {
   ANIMATION_PHASE_OPTIONS,
   TRIGGER_OPTIONS,
+  DEFAULT_ACTION,
   getBlockAnimations,
   getEffectLabel,
   getEffectOptions,
@@ -1319,6 +1320,8 @@ export function SidebarRight() {
     updateBlock,
     updateBlocks,
     updateBlockAnimation,
+    addBlockAction,
+    removeBlockAction,
     moveBlockAnimation,
     setActiveBlock,
     bringBlockToFront,
@@ -1353,6 +1356,7 @@ export function SidebarRight() {
 
   const [formatTab, setFormatTab] = useState<FormatTab>('text')
   const [animationTab, setAnimationTab] = useState<AnimationPhase>('buildIn')
+  const [activeActionId, setActiveActionId] = useState<string | null>(null)
   const [isBuildOrderOpen, setBuildOrderOpen] = useState(false)
   const [previewLoopKey, setPreviewLoopKey] = useState<string | null>(null)
   const [textInspector, setTextInspector] = useState<TextInspectorState>({
@@ -1363,19 +1367,25 @@ export function SidebarRight() {
   })
 
   const activeAnimations = activeBlock ? getBlockAnimations(activeBlock) : null
-  const activeAnimation = activeAnimations?.[animationTab] ?? null
-  const activeActionAnim = animationTab === 'action' ? activeAnimations?.action ?? null : null
+  
+  const isActionTab = animationTab === 'action'
+  const actionList = activeAnimations?.action ?? []
+  const selectedAction = isActionTab ? (actionList.find(a => a.id === activeActionId) || actionList[0] || null) : null
+  
+  const activeAnimation = isActionTab ? selectedAction : (activeAnimations?.[animationTab] ?? null)
+  const activeActionAnim = isActionTab ? selectedAction : null
 
   const syncAnimationTab = useEffectEvent(() => {
-    if (activeInspector !== 'animate' || !activeBlock) return
+    if (activeInspector !== 'animate' || !activeBlock || !activeAnimations) return
 
     // If the currently selected tab has an animation, stay on it.
-    if (activeAnimations?.[animationTab]?.effect !== 'none') return
+    if (animationTab === 'action' ? activeAnimations.action.some(a => a.effect !== 'none') : (activeAnimations[animationTab] as any)?.effect !== 'none') return
 
     // Otherwise, find the first tab that has an animation and switch to it.
     const phases: AnimationPhase[] = ['buildIn', 'action', 'buildOut']
     const firstActive = phases.find((phase) => {
-      const animation = activeAnimations?.[phase]
+      if (phase === 'action') return activeAnimations.action.some(a => a.effect !== 'none')
+      const animation = activeAnimations[phase] as any
       return animation && animation.effect !== 'none'
     })
 
@@ -1388,8 +1398,7 @@ export function SidebarRight() {
     syncAnimationTab()
   }, [activeInspector, activeBlock?.id])
 
-  const previewRef = useRef<{ key: string; element: HTMLElement; block: typeof activeBlock } | null>(null)
-  const currentPreviewKey = activeBlock ? `${activeBlock.id}:${animationTab}` : null
+  const currentPreviewKey = activeBlock ? `${activeBlock.id}:${animationTab}${isActionTab && activeActionId ? `:${activeActionId}` : ''}` : null
   const isPreviewing = currentPreviewKey !== null && previewLoopKey === currentPreviewKey
 
   /* ESC closes build order modal */
@@ -1502,6 +1511,8 @@ export function SidebarRight() {
     if (typeof clearSavedEditableSelections !== 'undefined') clearSavedEditableSelections()
   }, [])
 
+  const previewRef = useRef<{ key: string; element: HTMLElement; block: typeof activeBlock } | null>(null)
+
   const stopPreview = () => {
     if (previewRef.current?.block) {
       restoreBlockAfterPreview(previewRef.current.element, previewRef.current.block)
@@ -1510,7 +1521,7 @@ export function SidebarRight() {
     setPreviewLoopKey(null)
   }
 
-  useEffect(() => () => stopPreview(), [activeBlockId, animationTab, currentSlideId])
+  useEffect(() => () => stopPreview(), [activeBlockId, animationTab, activeActionId, currentSlideId])
 
   const handleTabChange = (tab: InspectorTab) => {
     if (tab !== 'animate') { stopPreview(); setBuildOrderOpen(false) }
@@ -1525,7 +1536,8 @@ export function SidebarRight() {
     if (!el) return
     if (isPreviewing) { stopPreview(); return }
     stopPreview()
-    const started = previewBlockPhase(el, activeBlock, animationTab)
+    const targetActionId = isActionTab ? (activeActionId ?? actionList[0]?.id) : undefined
+    const started = previewBlockPhase(el, activeBlock, animationTab, targetActionId)
     if (!started) return
     if (animationTab === 'action' && activeActionAnim?.loop && currentPreviewKey) {
       previewRef.current = { key: currentPreviewKey, element: el, block: activeBlock }
@@ -1536,7 +1548,8 @@ export function SidebarRight() {
   const updateAnim = (updates: Partial<{ effect: string; trigger: TriggerType; duration: number; delay: number; order: number; loop: boolean }>) => {
     if (!currentSlide || !activeBlock) return
     stopPreview()
-    updateBlockAnimation(currentSlide.id, activeBlock.id, animationTab, updates)
+    const targetActionId = isActionTab ? (activeActionId ?? actionList[0]?.id) : undefined
+    updateBlockAnimation(currentSlide.id, activeBlock.id, animationTab, updates, targetActionId)
   }
 
   const upd = (field: Parameters<typeof updateBlock>[2]) => {
@@ -2542,19 +2555,67 @@ export function SidebarRight() {
                     />
                   </div>
 
+                  {isActionTab && (
+                    <div style={{ padding: '0 12px', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: actionList.length > 0 ? 12 : 0 }}>
+                      {actionList.map((a, i) => {
+                        const isActive = activeActionId === a.id || (!activeActionId && i === 0 && selectedAction?.id === a.id)
+                        return (
+                          <div
+                            key={a.id}
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              padding: '6px 8px', borderRadius: 6, cursor: 'pointer',
+                              background: isActive ? 'var(--kn2-active-bg, rgba(0, 122, 255, 0.1))' : 'var(--kn2-bg-secondary)',
+                              border: `1px solid ${isActive ? 'var(--kn2-active-border, #007aff)' : 'transparent'}`,
+                            }}
+                            onClick={() => setActiveActionId(a.id)}
+                          >
+                            <span style={{ fontSize: 13, color: 'var(--kn2-text-primary)' }}>
+                              动作 {i + 1}: {getEffectLabel('action', a.effect)}
+                            </span>
+                            <button
+                              className="kn2-icon-btn"
+                              style={{ padding: 4 }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                removeBlockAction(currentSlide.id, activeBlock.id, a.id)
+                                if (activeActionId === a.id) setActiveActionId(null)
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        )
+                      })}
+                      <button
+                        className={actionList.length === 0 ? "kn2-primary-btn" : "kn2-secondary-btn"}
+                        style={{ width: '100%', justifyContent: 'center' }}
+                        onClick={() => {
+                          const newId = Math.random().toString(36).substring(2, 11)
+                          addBlockAction(currentSlide.id, activeBlock.id, { ...DEFAULT_ACTION, id: newId, effect: getDefaultEffect('action') } as any)
+                          setActiveActionId(newId)
+                        }}
+                      >
+                        ＋ 添加动作
+                      </button>
+                    </div>
+                  )}
+
                   {!activeAnimation || activeAnimation.effect === 'none' ? (
                     <div className="kn2-anim-empty">
                       <p>{ANIMATION_PHASE_OPTIONS.find((p) => p.id === animationTab)?.emptyLabel}</p>
-                      <button
-                        className="kn2-primary-btn"
-                        onClick={() => updateAnim({ effect: getDefaultEffect(animationTab) })}
-                      >
-                        ＋ 添加效果
-                      </button>
+                      {!isActionTab && (
+                        <button
+                          className="kn2-primary-btn"
+                          onClick={() => updateAnim({ effect: getDefaultEffect(animationTab) })}
+                        >
+                          ＋ 添加效果
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="kn2-anim-panel" style={{ padding: '0 12px 16px' }}>
-                      <KNPanel title="动画设置" defaultOpen={true}>
+                      <KNPanel title={isActionTab ? `设置 (动作 ${actionList.findIndex(a => a.id === activeAnimation.id) + 1})` : "动画设置"} defaultOpen={true}>
                         <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                           {/* Effect + preview */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2597,12 +2658,12 @@ export function SidebarRight() {
                           </div>
 
                           {/* Loop (action only) */}
-                          {activeActionAnim && (
+                          {isActionTab && (
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                               <span style={{ fontSize: 13, color: '#555' }}>循环</span>
                               <Toggle
-                                checked={activeActionAnim.loop}
-                                onChange={() => updateAnim({ loop: !activeActionAnim.loop })}
+                                checked={(activeAnimation as any).loop ?? false}
+                                onChange={() => updateAnim({ loop: !(activeAnimation as any).loop })}
                               />
                             </div>
                           )}
@@ -2632,7 +2693,14 @@ export function SidebarRight() {
                         </button>
                         <button
                           className="kn2-ghost-danger-btn"
-                          onClick={() => updateAnim({ effect: 'none' })}
+                          onClick={() => {
+                            if (isActionTab && (activeAnimation as any).id) {
+                              removeBlockAction(currentSlide.id, activeBlock.id, (activeAnimation as any).id)
+                              setActiveActionId(null)
+                            } else {
+                              updateAnim({ effect: 'none' })
+                            }
+                          }}
                         >
                           移除效果
                         </button>
@@ -2735,10 +2803,11 @@ export function SidebarRight() {
         <BuildOrderModal
           activeBlockId={activeBlockId}
           animationTab={animationTab}
+          activeActionId={activeActionId}
           buildOrder={buildOrder}
           onClose={() => setBuildOrderOpen(false)}
-          onMove={(id, phase, dir) => moveBlockAnimation(currentSlide.id, id, phase, dir)}
-          onSelect={(id, phase) => { setActiveBlock(id); setActiveInspector('animate'); setAnimationTab(phase) }}
+          onMove={(id, phase, dir, actionId) => moveBlockAnimation(currentSlide.id, id, phase, dir, actionId)}
+          onSelect={(id, phase, actionId) => { setActiveBlock(id); setActiveInspector('animate'); setAnimationTab(phase); if (actionId) setActiveActionId(actionId) }}
           slideName={currentSlide.name}
         />
       )}
@@ -2753,14 +2822,15 @@ export function SidebarRight() {
 type BuildOrderModalProps = {
   activeBlockId: string | null
   animationTab: AnimationPhase
+  activeActionId?: string | null
   buildOrder: ReturnType<typeof getSlideBuildOrder>
   onClose: () => void
-  onMove: (blockId: string, phase: AnimationPhase, direction: -1 | 1) => void
-  onSelect: (blockId: string, phase: AnimationPhase) => void
+  onMove: (blockId: string, phase: AnimationPhase, direction: -1 | 1, actionId?: string) => void
+  onSelect: (blockId: string, phase: AnimationPhase, actionId?: string) => void
   slideName: string
 }
 
-function BuildOrderModal({ activeBlockId, animationTab, buildOrder, onClose, onMove, onSelect, slideName }: BuildOrderModalProps) {
+function BuildOrderModal({ activeBlockId, animationTab, activeActionId, buildOrder, onClose, onMove, onSelect, slideName }: BuildOrderModalProps) {
   return (
     <div className="bom-backdrop" onClick={onClose}>
       <div className="bom" role="dialog" aria-modal="true" aria-labelledby="bomTitle" onClick={(e) => e.stopPropagation()}>
@@ -2780,33 +2850,36 @@ function BuildOrderModal({ activeBlockId, animationTab, buildOrder, onClose, onM
           </div>
         ) : (
           <div className="bom__list">
-            {buildOrder.map((item, i) => (
-              <div
-                key={`${item.blockId}-${item.phase}`}
-                className={item.blockId === activeBlockId && item.phase === animationTab ? 'bom__item bom__item--active' : 'bom__item'}
-                onClick={() => onSelect(item.blockId, item.phase)}
-              >
-                <div className="bom__num">{i + 1}</div>
-                <div className="bom__copy">
-                  <div className="bom__topline">
-                    <strong>{item.blockName}</strong>
-                    <span className={`bom__phase bom__phase--${item.phase}`}>{getPhaseLabel(item.phase)}</span>
+            {buildOrder.map((item, i) => {
+              const isActive = item.blockId === activeBlockId && item.phase === animationTab && (item.phase !== 'action' || item.actionId === activeActionId)
+              return (
+                <div
+                  key={`${item.blockId}-${item.phase}${item.actionId ? `-${item.actionId}` : ''}`}
+                  className={isActive ? 'bom__item bom__item--active' : 'bom__item'}
+                  onClick={() => onSelect(item.blockId, item.phase, item.actionId)}
+                >
+                  <div className="bom__num">{i + 1}</div>
+                  <div className="bom__copy">
+                    <div className="bom__topline">
+                      <strong>{item.blockName}</strong>
+                      <span className={`bom__phase bom__phase--${item.phase}`}>{getPhaseLabel(item.phase)}</span>
+                    </div>
+                    <div className="bom__meta">
+                      <span>{getEffectLabel(item.phase, item.animation.effect)}</span>
+                      <span>·</span>
+                      <span>{getTriggerLabel(item.animation.trigger)}</span>
+                      {'loop' in item.animation && item.animation.loop && <><span>·</span><span>循环</span></>}
+                      <span>·</span>
+                      <span>{item.animation.duration.toFixed(1)} 秒</span>
+                    </div>
                   </div>
-                  <div className="bom__meta">
-                    <span>{getEffectLabel(item.phase, item.animation.effect)}</span>
-                    <span>·</span>
-                    <span>{getTriggerLabel(item.animation.trigger)}</span>
-                    {'loop' in item.animation && item.animation.loop && <><span>·</span><span>循环</span></>}
-                    <span>·</span>
-                    <span>{item.animation.duration.toFixed(1)} 秒</span>
+                  <div className="bom__controls" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => onMove(item.blockId, item.phase, -1, item.actionId)} disabled={i === 0}><ChevronUp size={13} /></button>
+                    <button onClick={() => onMove(item.blockId, item.phase, 1, item.actionId)} disabled={i === buildOrder.length - 1}><ChevronDown size={13} /></button>
                   </div>
                 </div>
-                <div className="bom__controls" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => onMove(item.blockId, item.phase, -1)} disabled={i === 0}><ChevronUp size={13} /></button>
-                  <button onClick={() => onMove(item.blockId, item.phase, 1)} disabled={i === buildOrder.length - 1}><ChevronDown size={13} /></button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

@@ -56,7 +56,7 @@ const DEFAULT_BUILD_IN: BuildInAnimation = {
   order: 0,
 }
 
-const DEFAULT_ACTION: ActionAnimation = {
+export const DEFAULT_ACTION: Omit<ActionAnimation, 'id'> = {
   effect: 'none',
   trigger: 'onClick',
   duration: 0.7,
@@ -77,7 +77,8 @@ export type BuildOrderItem = {
   blockId: string
   blockName: string
   phase: AnimationPhase
-  animation: BlockAnimations[AnimationPhase]
+  actionId?: string
+  animation: BuildInAnimation | ActionAnimation | BuildOutAnimation
 }
 
 type BlockAnimationPatch = Partial<{
@@ -104,7 +105,7 @@ export function createDefaultBlockAnimations(
 ): BlockAnimations {
   return {
     buildIn: { ...DEFAULT_BUILD_IN, ...buildInOverrides },
-    action: { ...DEFAULT_ACTION },
+    action: [],
     buildOut: { ...DEFAULT_BUILD_OUT },
   }
 }
@@ -118,16 +119,29 @@ export function getBlockAnimations(block: Pick<EditorBlock, 'animations' | 'anim
     order: block.anim && block.anim !== 'none' ? 1 : 0,
   }
 
+  let actionArray: ActionAnimation[] = []
+  if (block.animations?.action) {
+    if (Array.isArray(block.animations.action)) {
+      actionArray = block.animations.action
+    } else {
+      const legacyAction: any = block.animations.action
+      if (legacyAction.effect && legacyAction.effect !== 'none') {
+        actionArray = [{
+          ...DEFAULT_ACTION,
+          id: legacyAction.id || Math.random().toString(36).substring(2, 11),
+          ...legacyAction,
+        }]
+      }
+    }
+  }
+
   return {
     buildIn: {
       ...DEFAULT_BUILD_IN,
       ...buildInLegacy,
       ...block.animations?.buildIn,
     },
-    action: {
-      ...DEFAULT_ACTION,
-      ...block.animations?.action,
-    },
+    action: actionArray,
     buildOut: {
       ...DEFAULT_BUILD_OUT,
       ...block.animations?.buildOut,
@@ -137,7 +151,9 @@ export function getBlockAnimations(block: Pick<EditorBlock, 'animations' | 'anim
 
 export function hasAnyBlockAnimation(block: EditorBlock) {
   const animations = getBlockAnimations(block)
-  return PHASES.some((phase) => isActiveEffect(animations[phase].effect))
+  return isActiveEffect(animations.buildIn.effect) ||
+         animations.action.some(a => isActiveEffect(a.effect)) ||
+         isActiveEffect(animations.buildOut.effect)
 }
 
 export function getEffectOptions(phase: AnimationPhase) {
@@ -170,7 +186,7 @@ export function normalizeBlockAnimations(block: EditorBlock) {
 
 export function normalizeSlideAnimations(slide: Slide): Slide {
   const items = collectSlideBuildOrder(slide)
-  const orderMap = new Map(items.map((item, index) => [`${item.blockId}:${item.phase}`, index + 1]))
+  const orderMap = new Map(items.map((item, index) => [`${item.blockId}:${item.phase}${item.actionId ? `:${item.actionId}` : ''}`, index + 1]))
 
   return {
     ...slide,
@@ -183,12 +199,10 @@ export function normalizeSlideAnimations(slide: Slide): Slide {
             ? (orderMap.get(`${block.id}:buildIn`) ?? 0)
             : 0,
         },
-        action: {
-          ...animations.action,
-          order: isActiveEffect(animations.action.effect)
-            ? (orderMap.get(`${block.id}:action`) ?? 0)
-            : 0,
-        },
+        action: animations.action.map(a => ({
+          ...a,
+          order: isActiveEffect(a.effect) ? (orderMap.get(`${block.id}:action:${a.id}`) ?? 0) : 0
+        })),
         buildOut: {
           ...animations.buildOut,
           order: isActiveEffect(animations.buildOut.effect)
@@ -217,6 +231,7 @@ export function updateSlideBlockAnimation(
   blockId: string,
   phase: AnimationPhase,
   updates: BlockAnimationPatch,
+  actionId?: string,
 ) {
   const nextOrder = collectSlideBuildOrder(slide).length + 1
 
@@ -228,11 +243,35 @@ export function updateSlideBlockAnimation(
       }
 
       const animations = getBlockAnimations(block)
+
+      if (phase === 'action') {
+        if (!actionId) return normalizeBlockAnimations(block)
+        const currentActionIndex = animations.action.findIndex(a => a.id === actionId)
+        if (currentActionIndex < 0) return normalizeBlockAnimations(block)
+        
+        const current = animations.action[currentActionIndex]
+        const next = { ...current, ...updates }
+        if (!isActiveEffect(next.effect)) {
+          next.order = 0
+          next.delay = 0
+        } else if (!hasOrder(next.order)) {
+          next.order = nextOrder
+        }
+        
+        const nextActions = [...animations.action]
+        nextActions[currentActionIndex] = next as ActionAnimation
+        
+        return syncLegacyBuildIn(block, {
+          ...animations,
+          action: nextActions
+        })
+      }
+
       const current = animations[phase]
       const next = {
         ...current,
         ...updates,
-      }
+      } as any
 
       if (!isActiveEffect(next.effect)) {
         next.order = 0
@@ -249,14 +288,44 @@ export function updateSlideBlockAnimation(
   })
 }
 
+export function addSlideBlockAction(slide: Slide, blockId: string, action: ActionAnimation) {
+  const nextOrder = collectSlideBuildOrder(slide).length + 1
+  return normalizeSlideAnimations({
+    ...slide,
+    blocks: slide.blocks.map((block) => {
+      if (block.id !== blockId) return normalizeBlockAnimations(block)
+      const animations = getBlockAnimations(block)
+      return syncLegacyBuildIn(block, {
+        ...animations,
+        action: [...animations.action, { ...action, order: nextOrder }]
+      })
+    })
+  })
+}
+
+export function removeSlideBlockAction(slide: Slide, blockId: string, actionId: string) {
+  return normalizeSlideAnimations({
+    ...slide,
+    blocks: slide.blocks.map((block) => {
+      if (block.id !== blockId) return normalizeBlockAnimations(block)
+      const animations = getBlockAnimations(block)
+      return syncLegacyBuildIn(block, {
+        ...animations,
+        action: animations.action.filter(a => a.id !== actionId)
+      })
+    })
+  })
+}
+
 export function moveSlideBlockAnimation(
   slide: Slide,
   blockId: string,
   phase: AnimationPhase,
   direction: -1 | 1,
+  actionId?: string,
 ) {
   const items = collectSlideBuildOrder(slide)
-  const currentIndex = items.findIndex((item) => item.blockId === blockId && item.phase === phase)
+  const currentIndex = items.findIndex((item) => item.blockId === blockId && item.phase === phase && (phase !== 'action' || item.actionId === actionId))
 
   if (currentIndex < 0) {
     return normalizeSlideAnimations(slide)
@@ -271,7 +340,7 @@ export function moveSlideBlockAnimation(
   const [item] = reordered.splice(currentIndex, 1)
   reordered.splice(targetIndex, 0, item)
 
-  const orderMap = new Map(reordered.map((entry, index) => [`${entry.blockId}:${entry.phase}`, index + 1]))
+  const orderMap = new Map(reordered.map((entry, index) => [`${entry.blockId}:${entry.phase}${entry.actionId ? `:${entry.actionId}` : ''}`, index + 1]))
 
   return normalizeSlideAnimations({
     ...slide,
@@ -284,12 +353,10 @@ export function moveSlideBlockAnimation(
             ? (orderMap.get(`${block.id}:buildIn`) ?? 0)
             : 0,
         },
-        action: {
-          ...animations.action,
-          order: isActiveEffect(animations.action.effect)
-            ? (orderMap.get(`${block.id}:action`) ?? 0)
-            : 0,
-        },
+        action: animations.action.map(a => ({
+          ...a,
+          order: isActiveEffect(a.effect) ? (orderMap.get(`${block.id}:action:${a.id}`) ?? 0) : 0
+        })),
         buildOut: {
           ...animations.buildOut,
           order: isActiveEffect(animations.buildOut.effect)
@@ -301,29 +368,46 @@ export function moveSlideBlockAnimation(
   })
 }
 
-function collectSlideBuildOrder(slide: Slide) {
+function collectSlideBuildOrder(slide: Slide): (BuildOrderItem & { fallbackOrder: number })[] {
   return slide.blocks
     .flatMap((block, blockIndex) => {
       const animations = getBlockAnimations(block)
+      const items: (BuildOrderItem & { fallbackOrder: number })[] = []
 
-      return PHASES.flatMap((phase, phaseIndex) => {
-        const animation = animations[phase]
-        if (!isActiveEffect(animation.effect)) {
-          return []
-        }
+      if (isActiveEffect(animations.buildIn.effect)) {
+        items.push({
+          blockId: block.id,
+          blockName: block.name,
+          phase: 'buildIn',
+          animation: animations.buildIn,
+          fallbackOrder: blockIndex * 10 + 0,
+        })
+      }
 
-        const fallbackOrder = blockIndex * 10 + phaseIndex
-
-        return [
-          {
+      animations.action.forEach((action, actionIndex) => {
+        if (isActiveEffect(action.effect)) {
+          items.push({
             blockId: block.id,
             blockName: block.name,
-            phase,
-            animation,
-            fallbackOrder,
-          },
-        ]
+            phase: 'action',
+            actionId: action.id,
+            animation: action,
+            fallbackOrder: blockIndex * 10 + 1 + (actionIndex * 0.1),
+          })
+        }
       })
+
+      if (isActiveEffect(animations.buildOut.effect)) {
+        items.push({
+          blockId: block.id,
+          blockName: block.name,
+          phase: 'buildOut',
+          animation: animations.buildOut,
+          fallbackOrder: blockIndex * 10 + 2,
+        })
+      }
+
+      return items
     })
     .sort((left, right) => {
       if (hasOrder(left.animation.order) && hasOrder(right.animation.order)) {
@@ -344,7 +428,9 @@ function collectSlideBuildOrder(slide: Slide) {
       blockId: item.blockId,
       blockName: item.blockName,
       phase: item.phase,
+      actionId: item.actionId,
       animation: item.animation,
+      fallbackOrder: item.fallbackOrder,
     }))
 }
 

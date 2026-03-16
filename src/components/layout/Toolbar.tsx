@@ -4,7 +4,6 @@ import {
   Download,
   FileImage,
   Play,
-  Plus,
   Presentation,
   Shapes,
   Table2,
@@ -39,7 +38,6 @@ export function Toolbar() {
   const {
     presentationName,
     slides,
-    addSlide,
     insertBlock,
     togglePlayMode,
   } = useEditorStore()
@@ -161,20 +159,6 @@ export function Toolbar() {
           <strong>{presentationName}</strong>
           <span>{slides.length} 页</span>
         </div>
-      </div>
-
-      <div className="toolbar-section">
-        <button className="toolbar-btn toolbar-btn--compact" onClick={() => addSlide('blank')}>
-          <Plus size={16} />
-          <span>新建幻灯片</span>
-        </button>
-        <button
-          className="toolbar-btn toolbar-btn--accent toolbar-btn--compact"
-          onClick={() => togglePlayMode(true)}
-        >
-          <Play size={16} />
-          <span>播放</span>
-        </button>
       </div>
 
       <div className="toolbar-divider" />
@@ -448,6 +432,14 @@ export function Toolbar() {
         >
           <Upload size={16} />
           <span>导入</span>
+        </button>
+        <div className="toolbar-section-divider" />
+        <button
+          className="toolbar-btn toolbar-btn--compact toolbar-btn--play"
+          onClick={() => togglePlayMode(true)}
+        >
+          <Play size={16} />
+          <span>播放</span>
         </button>
         <input
           ref={fileInputRef}

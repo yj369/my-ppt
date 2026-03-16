@@ -19,6 +19,25 @@ type TipTapEditorProps = {
   isEditing: boolean
 }
 
+const extensions = [
+  StarterKit,
+  RichTextStyle,
+  FontFamily,
+  Underline,
+  Subscript,
+  Superscript,
+  Highlight.configure({ multicolor: true }),
+  TextAlign.configure({
+    types: ['heading', 'paragraph'],
+  }),
+  Placeholder.configure({
+    placeholder: '输入文本...',
+  }),
+  AsyncImage.configure({
+    allowBase64: true,
+  }),
+]
+
 export function TipTapEditor({ block, slideId, isEditing }: TipTapEditorProps) {
   const updateBlock = useEditorStore((state) => state.updateBlock)
   const activeBlockId = useEditorStore((state) => state.activeBlockId)
@@ -26,24 +45,7 @@ export function TipTapEditor({ block, slideId, isEditing }: TipTapEditorProps) {
   const lastContentRef = useRef(block.content)
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      RichTextStyle,
-      FontFamily,
-      Underline,
-      Subscript,
-      Superscript,
-      Highlight.configure({ multicolor: true }),
-      TextAlign.configure({
-        types: ['heading', 'paragraph'],
-      }),
-      Placeholder.configure({
-        placeholder: '输入文本...',
-      }),
-      AsyncImage.configure({
-        allowBase64: true,
-      }),
-    ],
+    extensions,
     content: block.content,
     editable: isEditing,
     onUpdate: ({ editor }) => {

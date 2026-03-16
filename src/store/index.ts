@@ -6,6 +6,8 @@ import {
   normalizeBlockAnimations,
   normalizeSlideAnimations,
   updateSlideBlockAnimation,
+  addSlideBlockAction,
+  removeSlideBlockAction,
 } from '../lib/animations'
 import { uniqueIds } from '../lib/selection'
 import {
@@ -91,8 +93,11 @@ export type EditorState = {
       order: number
       loop: boolean
     }>,
+    actionId?: string,
   ) => void
-  moveBlockAnimation: (slideId: string, blockId: string, phase: AnimationPhase, direction: -1 | 1) => void
+  addBlockAction: (slideId: string, blockId: string, action: import('../types/editor').ActionAnimation) => void
+  removeBlockAction: (slideId: string, blockId: string, actionId: string) => void
+  moveBlockAnimation: (slideId: string, blockId: string, phase: AnimationPhase, direction: -1 | 1, actionId?: string) => void
   duplicateBlock: (slideId: string, blockId: string) => void
   deleteBlock: (slideId: string, blockId: string) => void
   deleteBlocks: (slideId: string, blockIds: string[]) => void
@@ -462,19 +467,35 @@ export const useEditorStore = create<EditorState>((set) => ({
         ),
       }
     }),
-  updateBlockAnimation: (slideId, blockId, phase, updates) =>
+  updateBlockAnimation: (slideId, blockId, phase, updates, actionId) =>
     set((state) => ({
       slides: state.slides.map((slide) =>
         slide.id === slideId
-          ? updateSlideBlockAnimation(slide, blockId, phase, updates)
+          ? updateSlideBlockAnimation(slide, blockId, phase, updates, actionId)
           : slide,
       ),
     })),
-  moveBlockAnimation: (slideId, blockId, phase, direction) =>
+  addBlockAction: (slideId, blockId, action) =>
     set((state) => ({
       slides: state.slides.map((slide) =>
         slide.id === slideId
-          ? moveSlideBlockAnimation(slide, blockId, phase, direction)
+          ? addSlideBlockAction(slide, blockId, action)
+          : slide,
+      ),
+    })),
+  removeBlockAction: (slideId, blockId, actionId) =>
+    set((state) => ({
+      slides: state.slides.map((slide) =>
+        slide.id === slideId
+          ? removeSlideBlockAction(slide, blockId, actionId)
+          : slide,
+      ),
+    })),
+  moveBlockAnimation: (slideId, blockId, phase, direction, actionId) =>
+    set((state) => ({
+      slides: state.slides.map((slide) =>
+        slide.id === slideId
+          ? moveSlideBlockAnimation(slide, blockId, phase, direction, actionId)
           : slide,
       ),
     })),

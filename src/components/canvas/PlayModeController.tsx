@@ -183,6 +183,7 @@ function buildSequenceSteps(blocks: EditorBlock[], blockElements: Map<string, HT
     const nextItem: RuntimeSequenceItem = {
       element,
       phase: item.phase,
+      actionId: item.actionId,
       animation: item.animation,
       opacity: block.opacity,
     }

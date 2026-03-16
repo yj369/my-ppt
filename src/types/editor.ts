@@ -32,7 +32,10 @@ export type ElementType =
   | 'chart'
   | 'timeline'
   | 'shape-rect'
+  | 'shape-rounded'
   | 'shape-circle'
+  | 'shape-triangle'
+  | 'shape-diamond'
   | 'divider'
   | '3d'
 

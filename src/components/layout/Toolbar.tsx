@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react'
-import { useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import {
   Download,
   FileImage,
@@ -10,12 +10,16 @@ import {
   Table2,
   Type,
   Upload,
+  Circle,
+  Triangle,
 } from 'lucide-react'
 import { exportPresentationSnapshot, useEditorStore } from '../../store'
 import type { PresentationSnapshot } from '../../types/editor'
 
 export function Toolbar() {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isShapeMenuOpen, setShapeMenuOpen] = useState(false)
+  const shapeMenuRef = useRef<HTMLDivElement>(null)
   const {
     presentationName,
     slides,
@@ -58,6 +62,25 @@ export function Toolbar() {
     }
   }
 
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (shapeMenuRef.current && !shapeMenuRef.current.contains(e.target as Node)) {
+        setShapeMenuOpen(false)
+      }
+    }
+    if (isShapeMenuOpen) {
+      document.addEventListener('click', handleOutsideClick)
+    }
+    return () => {
+      document.removeEventListener('click', handleOutsideClick)
+    }
+  }, [isShapeMenuOpen])
+
+  const insertShapePreset = (type: any) => {
+    insertBlock(type)
+    setShapeMenuOpen(false)
+  }
+
   return (
     <header className="app-toolbar">
       <div className="toolbar-document">
@@ -91,10 +114,43 @@ export function Toolbar() {
           <Type size={16} />
           <span>文本</span>
         </button>
-        <button className="toolbar-pill" onClick={() => insertBlock('shape-rect')}>
-          <Shapes size={16} />
-          <span>形状</span>
-        </button>
+        <div style={{ position: 'relative' }} ref={shapeMenuRef}>
+          <button
+            className={`toolbar-pill ${isShapeMenuOpen ? 'toolbar-pill--active' : ''}`}
+            onClick={() => setShapeMenuOpen(!isShapeMenuOpen)}
+          >
+            <Shapes size={16} />
+            <span>形状</span>
+          </button>
+          
+          {isShapeMenuOpen && (
+            <div className="toolbar-shape-popover">
+              <div className="toolbar-shape-popover-grid">
+                <button type="button" onClick={() => insertShapePreset('shape-rect')} title="正方形">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="24" height="24" />
+                  </svg>
+                </button>
+                <button type="button" onClick={() => insertShapePreset('shape-rounded')} title="圆角矩形">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="24" height="24" rx="6" />
+                  </svg>
+                </button>
+                <button type="button" onClick={() => insertShapePreset('shape-circle')} title="圆形">
+                  <Circle size={24} fill="currentColor" strokeWidth={0} />
+                </button>
+                <button type="button" onClick={() => insertShapePreset('shape-triangle')} title="三角形">
+                  <Triangle size={24} fill="currentColor" strokeWidth={0} />
+                </button>
+                <button type="button" onClick={() => insertShapePreset('shape-diamond')} title="菱形">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L22 12L12 22L2 12L12 2Z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         <button className="toolbar-pill" onClick={() => insertBlock('image')}>
           <FileImage size={16} />
           <span>图片</span>

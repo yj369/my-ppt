@@ -15,6 +15,7 @@ type BlockStyle = CSSProperties & Record<
   | '--block-stroke-width'
   | '--block-stroke-style'
   | '--block-radius'
+  | '--block-clip-path'
   | '--block-shadow'
   | '--block-opacity'
   | '--block-text-gradient'
@@ -63,6 +64,22 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
     ? buildShadow(appearance)
     : undefined
 
+  // Compute specific shape constraints
+  let computedRadius = `${appearance.radius ?? 0}px`
+  let computedClipPath = 'none'
+
+  if (block.type === 'shape-rect') {
+    computedRadius = '0px'
+  } else if (block.type === 'shape-circle') {
+    computedRadius = '999px'
+  } else if (block.type === 'shape-triangle') {
+    computedRadius = '0px'
+    computedClipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)'
+  } else if (block.type === 'shape-diamond') {
+    computedRadius = '0px'
+    computedClipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'
+  }
+
   // Pass everything through CSS custom properties.
   const style: BlockStyle = {
     // Typography
@@ -103,7 +120,8 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
     '--block-stroke-color': appearance.stroke || 'transparent',
     '--block-stroke-width': `${appearance.strokeWidth ?? 1}px`,
     '--block-stroke-style': appearance.strokeStyle || 'none',
-    '--block-radius': `${appearance.radius ?? 0}px`,
+    '--block-radius': computedRadius,
+    '--block-clip-path': computedClipPath,
     '--block-shadow': shadowValue || 'none',
     '--block-opacity': String(appearance.fillOpacity ?? 1),
     '--block-text-gradient': isTextGradient ? appearance.textColor : 'none',

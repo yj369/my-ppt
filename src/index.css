@@ -11,12 +11,16 @@
   word-wrap: break-word;
 }
 
-.ProseMirror p.is-editor-empty:first-child::before {
+/* Only show placeholder when actively edting */
+.is-editing .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
-  color: #adb5bd;
+  color: rgba(255, 255, 255, 0.4);
   pointer-events: none;
   height: 0;
+  font-style: italic;
+  width: 100%;
+  text-align: inherit;
 }
 
 /* Ensure vertical alignment works in TipTap container */
@@ -210,7 +214,6 @@ textarea {
 }
 
 .toolbar-section--insert {
-  overflow-x: auto;
   gap: 4px;
 }
 
@@ -308,6 +311,72 @@ textarea {
 
 .toolbar-pill {
   min-width: 62px;
+}
+
+.toolbar-pill--active {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+.toolbar-shape-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+  animation: popDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toolbar-shape-popover::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 10px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  border-left: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.toolbar-shape-popover-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.toolbar-shape-popover-grid button {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #333;
+  cursor: pointer;
+  transition: background 0.1s, transform 0.1s;
+}
+
+.toolbar-shape-popover-grid button:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.toolbar-shape-popover-grid button:active {
+  transform: scale(0.96);
+  background: rgba(0, 0, 0, 0.08);
+}
+
+@keyframes popDown {
+  from { opacity: 0; transform: translate(-50%, -8px) scale(0.95); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
 .sidebar {
@@ -834,6 +903,7 @@ body.play-mode .editor-block {
   border-color: var(--block-stroke-color, transparent);
   
   border-radius: var(--block-radius, 0);
+  clip-path: var(--block-clip-path, none);
   box-shadow: var(--block-shadow, none);
   opacity: var(--block-opacity, 1);
 }
@@ -1188,7 +1258,9 @@ body.play-mode .editor-block {
 }
 
 .kn-shape-box,
-.kn-shape-circle {
+.kn-shape-circle,
+.kn-shape-triangle,
+.kn-shape-diamond {
   width: 100%;
   height: 100%;
   display: grid;
@@ -1204,6 +1276,14 @@ body.play-mode .editor-block {
 
 .kn-shape-circle {
   border-radius: 999px;
+}
+
+.kn-shape-triangle {
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+
+.kn-shape-diamond {
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
 }
 
 .kn-divider {

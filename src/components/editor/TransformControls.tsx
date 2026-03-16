@@ -117,12 +117,43 @@ export function TransformControls({
           y = state.startT + deltaY
         }
 
+        // Lock aspect ratio for circles: use the primary drag axis as canonical size
+        if (block.type === 'shape-circle') {
+          // Determine which axis the user is primarily dragging
+          const dragH = state.dir.includes('e') || state.dir.includes('w')
+          const dragV = state.dir.includes('n') || state.dir.includes('s')
+
+          let size: number
+          if (dragH && !dragV) {
+            // Pure horizontal drag - use width
+            size = Math.max(48, Math.abs(width))
+          } else if (dragV && !dragH) {
+            // Pure vertical drag - use height
+            size = Math.max(48, Math.abs(height))
+          } else {
+            // Corner drag - use the larger delta
+            size = Math.max(48, Math.abs(deltaX) >= Math.abs(deltaY) ? Math.abs(width) : Math.abs(height))
+          }
+
+          height = size
+          width = size
+
+          // Re-anchor x if resizing from the left
+          if (state.dir.includes('w')) {
+            x = state.startL + state.startW - size
+          }
+          // Re-anchor y if resizing from the top
+          if (state.dir.includes('n')) {
+            y = state.startT + state.startH - size
+          }
+        }
+
         setLocalTransform((prev) => ({
           ...prev,
           x,
           y,
           width: Math.max(48, width),
-          height: Math.max(32, height),
+          height: Math.max(48, height),
         }))
         return
       }

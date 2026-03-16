@@ -75,7 +75,7 @@ export type EditorState = {
   ) => void
   importPresentation: (snapshot: PresentationSnapshot) => void
   resetPresentation: () => void
-  insertBlock: (type: ElementType, position?: { x: number; y: number }) => void
+  insertBlock: (type: ElementType, options?: { x?: number; y?: number; width?: number; height?: number; src?: string }) => void
   addBlock: (slideId: string, block: EditorBlock) => void
   updateBlock: (slideId: string, blockId: string, updates: BlockUpdate) => void
   updateBlocks: (slideId: string, updates: BlockUpdateBatch) => void
@@ -391,14 +391,14 @@ export const useEditorStore = create<EditorState>((set) => ({
       showGuides: demo.showGuides,
     }))
   },
-  insertBlock: (type, position) =>
+  insertBlock: (type, options) =>
     set((state) => {
       const currentSlide = state.slides.find((slide) => slide.id === state.currentSlideId)
       if (!currentSlide || !state.currentSlideId) {
         return state
       }
 
-      const newBlock = createInsertedBlock(type, currentSlide.blocks, position)
+      const newBlock = createInsertedBlock(type, currentSlide.blocks, options)
 
       return {
         slides: state.slides.map((slide) =>

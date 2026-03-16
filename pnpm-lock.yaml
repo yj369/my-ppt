@@ -14,6 +14,9 @@ importers:
       '@react-three/fiber':
         specifier: ^9.5.0
         version: 9.5.0(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(three@0.183.2)
+      '@tiptap/core':
+        specifier: ^3.20.2
+        version: 3.20.2(@tiptap/pm@3.20.2)
       '@tiptap/extension-color':
         specifier: ^3.20.2
         version: 3.20.2(@tiptap/extension-text-style@3.20.2(@tiptap/core@3.20.2(@tiptap/pm@3.20.2)))
@@ -21,6 +24,9 @@ importers:
         specifier: ^3.20.2
         version: 3.20.2(@tiptap/extension-text-style@3.20.2(@tiptap/core@3.20.2(@tiptap/pm@3.20.2)))
       '@tiptap/extension-highlight':
+        specifier: ^3.20.2
+        version: 3.20.2(@tiptap/core@3.20.2(@tiptap/pm@3.20.2))
+      '@tiptap/extension-image':
         specifier: ^3.20.2
         version: 3.20.2(@tiptap/core@3.20.2(@tiptap/pm@3.20.2))
       '@tiptap/extension-link':
@@ -56,6 +62,9 @@ importers:
       gsap:
         specifier: ^3.14.2
         version: 3.14.2
+      idb-keyval:
+        specifier: ^6.2.2
+        version: 6.2.2
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.4)
@@ -554,6 +563,11 @@ packages:
     peerDependencies:
       '@tiptap/core': ^3.20.2
       '@tiptap/pm': ^3.20.2
+
+  '@tiptap/extension-image@3.20.2':
+    resolution: {integrity: sha512-STo7T3NQ1TcF93NXRQDhb5YkepBRpYHY54yfBUmHl5cygYZzOMaGlM0nh8NeX54mh3wJ6+nxpApuM3Jbmg0I+w==}
+    peerDependencies:
+      '@tiptap/core': ^3.20.2
 
   '@tiptap/extension-italic@3.20.2':
     resolution: {integrity: sha512-VAIXeJMx4g6WKqqNm8PYzoFrJaRNKLzLtqUXqYozKxnJLpF2HjsIrnBJV9PM+1FKK2Tic1UuowF4OI/6d162SA==}
@@ -1145,6 +1159,9 @@ packages:
 
   hls.js@1.6.15:
     resolution: {integrity: sha512-E3a5VwgXimGHwpRGV+WxRTKeSp2DW5DI5MWv34ulL3t5UNmyJWCQ1KmLEHbYzcfThfXG8amBL+fCYPneGHC4VA==}
+
+  idb-keyval@6.2.2:
+    resolution: {integrity: sha512-yjD9nARJ/jb1g+CvD0tlhUHOrJ9Sy0P8T9MF3YaLlHnSRpwPfpTX0XIvpmw3gAJUmEu3FiICLBDPXVwyEvrleg==}
 
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
@@ -2333,6 +2350,10 @@ snapshots:
       '@tiptap/core': 3.20.2(@tiptap/pm@3.20.2)
       '@tiptap/pm': 3.20.2
 
+  '@tiptap/extension-image@3.20.2(@tiptap/core@3.20.2(@tiptap/pm@3.20.2))':
+    dependencies:
+      '@tiptap/core': 3.20.2(@tiptap/pm@3.20.2)
+
   '@tiptap/extension-italic@3.20.2(@tiptap/core@3.20.2(@tiptap/pm@3.20.2))':
     dependencies:
       '@tiptap/core': 3.20.2(@tiptap/pm@3.20.2)
@@ -2962,6 +2983,8 @@ snapshots:
       hermes-estree: 0.25.1
 
   hls.js@1.6.15: {}
+
+  idb-keyval@6.2.2: {}
 
   ieee754@1.2.1: {}
 

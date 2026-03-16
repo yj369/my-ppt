@@ -4,7 +4,10 @@ import { getSelectionIdsForRect, normalizeSelectionRect, uniqueIds, type Selecti
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from '../../lib/presentation'
 import { useEditorStore } from '../../store'
 import type { ElementType } from '../../types/editor'
+import { saveLocalImage, getImageDimensions, calculateFitDimensions } from '../../lib/imageStorage'
 import { SlideFrame } from './SlideFrame'
+
+import { AlertTriangle, X } from 'lucide-react'
 
 function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
@@ -35,11 +38,13 @@ export function CanvasViewport() {
     togglePlayMode,
     setActiveBlock,
     setSelectedBlocks,
+    deleteSlide,
   } = useEditorStore()
 
   const viewportRef = useRef<HTMLElement>(null)
   const [isPanning, setIsPanning] = useState(false)
   const [spacePressed, setSpacePressed] = useState(false)
+  const [isDeletingSlide, setIsDeletingSlide] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   const [camStart, setCamStart] = useState({ x: 0, y: 0 })
   const [marqueeRect, setMarqueeRect] = useState<SelectionRect | null>(null)
@@ -137,6 +142,14 @@ export function CanvasViewport() {
         return
       }
 
+      if ((event.key === 'Backspace' || event.key === 'Delete') && state.currentSlideId && state.selectedBlockIds.length === 0) {
+        if (state.slides.length > 1) {
+          event.preventDefault()
+          setIsDeletingSlide(true)
+        }
+        return
+      }
+
       if (!state.currentSlideId || state.selectedBlockIds.length === 0) {
         return
       }
@@ -164,6 +177,43 @@ export function CanvasViewport() {
       }
     }
 
+    const handlePaste = async (event: ClipboardEvent) => {
+      // Don't intercept if user is typing in an input
+      if (isPlayMode || isTypingTarget(event.target)) {
+        return
+      }
+
+      const items = event.clipboardData?.items
+      if (!items) return
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          event.preventDefault()
+          const file = items[i].getAsFile()
+          if (!file) continue
+          
+          const state = useEditorStore.getState()
+          if (!state.currentSlideId) return
+
+          try {
+            const uri = await saveLocalImage(file)
+            const objectUrl = URL.createObjectURL(file)
+            getImageDimensions(objectUrl).then(({ width, height }) => {
+              const fit = calculateFitDimensions(width, height)
+              useEditorStore.getState().insertBlock('image', { src: uri, width: fit.width, height: fit.height })
+              URL.revokeObjectURL(objectUrl)
+            }).catch(() => {
+              useEditorStore.getState().insertBlock('image', { src: uri })
+              URL.revokeObjectURL(objectUrl)
+            })
+          } catch (e) {
+            console.error("Paste image failed:", e)
+          }
+          break // Only handle the first pasted image
+        }
+      }
+    }
+
     const handleKeyUp = (event: KeyboardEvent) => {
       if (event.code === 'Space') {
         setSpacePressed(false)
@@ -172,9 +222,11 @@ export function CanvasViewport() {
 
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
+    window.addEventListener('paste', handlePaste)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
+      window.removeEventListener('paste', handlePaste)
     }
   }, [deleteBlocks, duplicateBlock, duplicateSlide, groupBlocks, isPlayMode, moveBlocksBy, togglePlayMode, ungroupBlocks])
 
@@ -333,14 +385,9 @@ export function CanvasViewport() {
     }
   }
 
-  const handleDrop = (event: DragEvent) => {
+  const handleDrop = async (event: DragEvent) => {
     event.preventDefault()
     if (!currentSlideId) {
-      return
-    }
-
-    const templateId = event.dataTransfer.getData('templateId') as ElementType
-    if (!templateId) {
       return
     }
 
@@ -348,12 +395,37 @@ export function CanvasViewport() {
     if (!slideElement) {
       return
     }
-
     const rect = slideElement.getBoundingClientRect()
-    insertBlock(templateId, {
-      x: Math.round((event.clientX - rect.left) / camZoom),
-      y: Math.round((event.clientY - rect.top) / camZoom),
-    })
+    const dropX = Math.round((event.clientX - rect.left) / camZoom)
+    const dropY = Math.round((event.clientY - rect.top) / camZoom)
+
+    // Handle File Drop (Images)
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+      const file = event.dataTransfer.files[0]
+      if (file.type.startsWith('image/')) {
+        try {
+          const uri = await saveLocalImage(file)
+          const objectUrl = URL.createObjectURL(file)
+          getImageDimensions(objectUrl).then(({ width, height }) => {
+            const fit = calculateFitDimensions(width, height)
+            insertBlock('image', { x: dropX, y: dropY, src: uri, width: fit.width, height: fit.height })
+            URL.revokeObjectURL(objectUrl)
+          }).catch(() => {
+            insertBlock('image', { x: dropX, y: dropY, src: uri })
+            URL.revokeObjectURL(objectUrl)
+          })
+        } catch (e) {
+          console.error("Drop image failed:", e)
+        }
+        return
+      }
+    }
+
+    // Handle Template Drop (Sidebar shapes/blocks)
+    const templateId = event.dataTransfer.getData('templateId') as ElementType
+    if (templateId) {
+      insertBlock(templateId, { x: dropX, y: dropY })
+    }
   }
 
   const handleCanvasClick = (event: MouseEvent) => {
@@ -400,7 +472,72 @@ export function CanvasViewport() {
           <span>{Math.round(camZoom * 100)}%</span>
           <button onClick={() => adjustZoom(0.1)}>放大</button>
           <button onClick={() => fitCanvasCenter(false)}>适应屏幕</button>
-          {selectedBlockIds.length > 0 && <span className="zoom-toolbar__hint">Delete 删除 · Shift + 方向键 快移</span>}
+        </div>
+      )}
+
+      {isDeletingSlide && (
+        <div style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 100,
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            width: '380px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(15, 23, 42, 0.05)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px',
+            position: 'relative',
+            animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}>
+            <button 
+              onClick={() => setIsDeletingSlide(false)}
+              style={{ position: 'absolute', top: '16px', right: '16px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+            >
+              <X size={18} />
+            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '16px' }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>确定要删除当前幻灯片吗？</h3>
+                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  您正在尝试删除包含内容的演示页面。此操作一旦执行将无法轻易撤销。
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <button 
+                onClick={() => setIsDeletingSlide(false)}
+                style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--surface-sunken)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseEnter={(e) => (e.target as HTMLElement).style.background = 'var(--surface)' }
+                onMouseLeave={(e) => (e.target as HTMLElement).style.background = 'var(--surface-sunken)' }
+              >
+                取消
+              </button>
+              <button 
+                onClick={() => {
+                  if (currentSlideId) deleteSlide(currentSlideId)
+                  setIsDeletingSlide(false)
+                }}
+                style={{ flex: 1, padding: '10px', borderRadius: '8px', background: '#ef4444', border: 'none', color: 'white', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)' }}
+                onMouseEnter={(e) => (e.target as HTMLElement).style.background = '#dc2626' }
+                onMouseLeave={(e) => (e.target as HTMLElement).style.background = '#ef4444' }
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>

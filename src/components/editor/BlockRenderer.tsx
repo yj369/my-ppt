@@ -158,10 +158,10 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
         : appearance.verticalAlign === 'bottom'
         ? 'flex-end'
         : 'flex-start',
-    paddingTop: `${paddingTop}px`,
-    paddingRight: `${paddingRight}px`,
-    paddingBottom: `${paddingBottom}px`,
-    paddingLeft: `${paddingLeft}px`,
+    paddingTop: block.type === 'image' ? '0px' : `${paddingTop}px`,
+    paddingRight: block.type === 'image' ? '0px' : `${paddingRight}px`,
+    paddingBottom: block.type === 'image' ? '0px' : `${paddingBottom}px`,
+    paddingLeft: block.type === 'image' ? '0px' : `${paddingLeft}px`,
     // Flip
     transform: flipScale || undefined,
     // CSS vars

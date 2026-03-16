@@ -12,14 +12,25 @@ import {
   Upload,
   Circle,
   Triangle,
+  Link as LinkIcon,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { exportPresentationSnapshot, useEditorStore } from '../../store'
 import type { PresentationSnapshot } from '../../types/editor'
+import { saveLocalImage, getImageDimensions, calculateFitDimensions } from '../../lib/imageStorage'
 
 export function Toolbar() {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const imageUploadRef = useRef<HTMLInputElement>(null)
+  
   const [isShapeMenuOpen, setShapeMenuOpen] = useState(false)
   const shapeMenuRef = useRef<HTMLDivElement>(null)
+
+  const [isImageMenuOpen, setImageMenuOpen] = useState(false)
+  const imageMenuRef = useRef<HTMLDivElement>(null)
+  const [imageTab, setImageTab] = useState<'local' | 'online'>('local')
+  const [imageUrl, setImageUrl] = useState('')
+
   const {
     presentationName,
     slides,
@@ -64,21 +75,72 @@ export function Toolbar() {
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
-      if (shapeMenuRef.current && !shapeMenuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (isShapeMenuOpen && shapeMenuRef.current && !shapeMenuRef.current.contains(target)) {
         setShapeMenuOpen(false)
       }
+      if (isImageMenuOpen && imageMenuRef.current && !imageMenuRef.current.contains(target)) {
+        setImageMenuOpen(false)
+      }
     }
-    if (isShapeMenuOpen) {
-      document.addEventListener('click', handleOutsideClick)
+
+    if (isShapeMenuOpen || isImageMenuOpen) {
+      document.addEventListener('mousedown', handleOutsideClick)
     }
     return () => {
-      document.removeEventListener('click', handleOutsideClick)
+      document.removeEventListener('mousedown', handleOutsideClick)
     }
-  }, [isShapeMenuOpen])
+  }, [isShapeMenuOpen, isImageMenuOpen])
 
   const insertShapePreset = (type: any) => {
     insertBlock(type)
     setShapeMenuOpen(false)
+  }
+
+  const handleInsertImageUrl = () => {
+    if (!imageUrl.trim()) return
+    const url = imageUrl
+    setImageUrl('')
+    setImageMenuOpen(false)
+
+    getImageDimensions(url)
+      .then(({ width, height }) => {
+        const fit = calculateFitDimensions(width, height)
+        insertBlock('image', { src: url, width: fit.width, height: fit.height })
+      })
+      .catch(() => {
+        insertBlock('image', { src: url })
+      })
+  }
+
+  const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const uri = await saveLocalImage(file)
+      const objectUrl = URL.createObjectURL(file)
+      
+      getImageDimensions(objectUrl)
+        .then(({ width, height }) => {
+          const fit = calculateFitDimensions(width, height)
+          insertBlock('image', { src: uri, width: fit.width, height: fit.height })
+          URL.revokeObjectURL(objectUrl)
+        })
+        .catch(() => {
+          insertBlock('image', { src: uri })
+          URL.revokeObjectURL(objectUrl)
+        })
+        
+      setImageMenuOpen(false)
+    } catch (e) {
+      console.error("Local image upload failed:", e)
+      window.alert("图片上传失败")
+    } finally {
+      if (imageUploadRef.current) {
+        imageUploadRef.current.value = ''
+      }
+    }
   }
 
   return (
@@ -117,7 +179,10 @@ export function Toolbar() {
         <div style={{ position: 'relative' }} ref={shapeMenuRef}>
           <button
             className={`toolbar-pill ${isShapeMenuOpen ? 'toolbar-pill--active' : ''}`}
-            onClick={() => setShapeMenuOpen(!isShapeMenuOpen)}
+            onClick={() => {
+              setShapeMenuOpen(!isShapeMenuOpen)
+              if (!isShapeMenuOpen) setImageMenuOpen(false)
+            }}
           >
             <Shapes size={16} />
             <span>形状</span>
@@ -183,10 +248,154 @@ export function Toolbar() {
             </div>
           )}
         </div>
-        <button className="toolbar-pill" onClick={() => insertBlock('image')}>
-          <FileImage size={16} />
-          <span>图片</span>
-        </button>
+        
+        <div style={{ position: 'relative' }} ref={imageMenuRef}>
+          <button 
+            className={`toolbar-pill ${isImageMenuOpen ? 'toolbar-pill--active' : ''}`} 
+            onClick={() => {
+              setImageMenuOpen(!isImageMenuOpen)
+              if (!isImageMenuOpen) setShapeMenuOpen(false)
+            }}
+          >
+            <FileImage size={16} />
+            <span>图片</span>
+          </button>
+          
+          {isImageMenuOpen && (
+            <div className="toolbar-shape-popover" style={{ width: '280px', display: 'flex', flexDirection: 'column' }}>
+              {/* Tabs Section */}
+              <div style={{ display: 'flex', borderBottom: '1px solid rgba(15, 23, 42, 0.08)' }}>
+                <button 
+                  style={{ 
+                    flex: 1, 
+                    padding: '12px 0', 
+                    fontSize: '12px', 
+                    fontWeight: 600,
+                    color: imageTab === 'local' ? 'var(--text-primary)' : 'var(--text-muted)',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: imageTab === 'local' ? '2px solid var(--accent)' : '2px solid transparent',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                  onClick={() => setImageTab('local')}
+                >
+                  本地文件
+                </button>
+                <button 
+                  style={{ 
+                    flex: 1, 
+                    padding: '12px 0', 
+                    fontSize: '12px', 
+                    fontWeight: 600,
+                    color: imageTab === 'online' ? 'var(--text-primary)' : 'var(--text-muted)',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: imageTab === 'online' ? '2px solid var(--accent)' : '2px solid transparent',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                  onClick={() => setImageTab('online')}
+                >
+                  在线链接
+                </button>
+              </div>
+
+              {/* Content Panel */}
+              <div style={{ padding: '20px' }}>
+                {imageTab === 'local' && (
+                  <div 
+                    style={{ 
+                      border: '1px dashed rgba(15, 23, 42, 0.16)', 
+                      borderRadius: '12px', 
+                      height: '140px',
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      gap: '12px',
+                      background: 'rgba(248, 250, 252, 0.6)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onClick={() => imageUploadRef.current?.click()}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = 'rgba(10, 132, 255, 0.04)';
+                      (e.currentTarget as HTMLElement).style.borderColor = 'rgba(10, 132, 255, 0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = 'rgba(248, 250, 252, 0.6)';
+                      (e.currentTarget as HTMLElement).style.borderColor = 'rgba(15, 23, 42, 0.16)';
+                    }}
+                  >
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                      <ImageIcon size={20} color="var(--accent)" />
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>选择本地图片</p>
+                      <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>支持拖拽或点击</p>
+                    </div>
+                    <input
+                      ref={imageUploadRef}
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={handleImageUpload}
+                    />
+                  </div>
+                )}
+
+                {imageTab === 'online' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
+                      <LinkIcon size={14} style={{ position: 'absolute', left: '10px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                      <input 
+                        type="text" 
+                        placeholder="https://..." 
+                        style={{ 
+                          width: '100%',
+                          paddingLeft: '32px', 
+                          paddingRight: '12px',
+                          height: '36px', 
+                          borderRadius: '8px',
+                          border: '1px solid var(--border)',
+                          background: 'var(--surface-sunken)',
+                          color: 'var(--text-primary)',
+                          fontSize: '13px',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                          transition: 'border-color 0.2s',
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
+                        onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+                        value={imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleInsertImageUrl()
+                        }}
+                      />
+                    </div>
+                    <button 
+                      className="toolbar-btn toolbar-btn--accent" 
+                      style={{ width: '100%', justifyContent: 'center', height: '36px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}
+                      onClick={handleInsertImageUrl}
+                      disabled={!imageUrl.trim()}
+                    >
+                      插入图片
+                    </button>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '12px', background: 'rgba(15, 23, 42, 0.03)', borderRadius: '8px' }}>
+                      <ImageIcon size={14} color="var(--text-muted)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                      <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                        链接的图片不会被保存到您的本地浏览器缓存中。请确保链接长期有效。
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         <button className="toolbar-pill" onClick={() => insertBlock('table')}>
           <Table2 size={16} />
           <span>表格</span>

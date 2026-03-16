@@ -139,6 +139,7 @@ const baseTextAppearance = (textColor = '#f8fafc'): BlockAppearance => ({
 
 type BlockOverrides = Partial<Omit<EditorBlock, 'appearance'>> & {
   appearance?: Partial<BlockAppearance>
+  src?: string
 }
 
 export function getThemeLabel(theme: PresentationTheme) {
@@ -196,20 +197,20 @@ export function cloneSlide(slide: Slide): Slide {
 export function createInsertedBlock(
   type: ElementType,
   blocks: EditorBlock[],
-  position?: { x: number; y: number },
+  overrides?: BlockOverrides,
 ) {
-  const block = createBlockPreset(type)
+  const block = createBlockPreset(type, overrides)
 
   return {
     ...block,
-    x: position?.x ?? Math.round(SLIDE_WIDTH / 2 - block.width / 2 + blocks.length * 8),
-    y: position?.y ?? Math.round(SLIDE_HEIGHT / 2 - block.height / 2 + blocks.length * 8),
+    x: overrides?.x ?? Math.round(SLIDE_WIDTH / 2 - block.width / 2 + blocks.length * 8),
+    y: overrides?.y ?? Math.round(SLIDE_HEIGHT / 2 - block.height / 2 + blocks.length * 8),
     zIndex: getNextZIndex(blocks),
   }
 }
 
 export function createBlockPreset(type: ElementType, overrides: BlockOverrides = {}): EditorBlock {
-  const preset = getPresetByType(type)
+  const preset = getPresetByType(type, overrides)
   const appearance = {
     ...preset.appearance,
     ...overrides.appearance,
@@ -230,7 +231,7 @@ export function createBlockPreset(type: ElementType, overrides: BlockOverrides =
   }))
 }
 
-function getPresetByType(type: ElementType): EditorBlock {
+function getPresetByType(type: ElementType, overrides?: BlockOverrides): EditorBlock {
   switch (type) {
     case 'eyebrow':
       return {
@@ -425,22 +426,19 @@ function getPresetByType(type: ElementType): EditorBlock {
         id: uuidv4(),
         name: '图片',
         type,
-        x: 820,
-        y: 110,
-        width: 360,
-        height: 470,
+        x: overrides?.x ?? 820,
+        y: overrides?.y ?? 110,
+        width: overrides?.width ?? 400,
+        height: overrides?.height ?? 300,
         zIndex: 8,
-        rotation: -2,
+        rotation: 0,
         opacity: 1,
         locked: false,
         hidden: false,
         content: `
-          <figure class="kn-media kn-surface">
-            <img src="${heroImage}" alt="演示插图" />
-            <figcaption contenteditable="true">图像占位，支持后续替换成本地或远程素材。</figcaption>
-          </figure>
+          <img src="${overrides?.src || heroImage}" alt="图片" style="width: 100%; height: 100%; object-fit: fill; pointer-events: none; display: block;" />
         `,
-        appearance: baseAppearance('#ffffff'),
+        appearance: baseAppearance('transparent'),
         anim: 'scale-in',
         trigger: 'withPrev',
         duration: 0.8,

@@ -11,6 +11,7 @@ import { useEffect, useRef } from 'react'
 import { RichTextStyle } from '../../lib/tiptap-extensions'
 import { useEditorStore } from '../../store'
 import type { EditorBlock } from '../../types/editor'
+import { AsyncImage } from './AsyncImage'
 
 type TipTapEditorProps = {
   block: EditorBlock
@@ -38,6 +39,9 @@ export function TipTapEditor({ block, slideId, isEditing }: TipTapEditorProps) {
       }),
       Placeholder.configure({
         placeholder: '输入文本...',
+      }),
+      AsyncImage.configure({
+        allowBase64: true,
       }),
     ],
     content: block.content,

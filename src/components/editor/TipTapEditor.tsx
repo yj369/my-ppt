@@ -7,6 +7,10 @@ import Superscript from '@tiptap/extension-superscript'
 import Highlight from '@tiptap/extension-highlight'
 import Placeholder from '@tiptap/extension-placeholder'
 import Underline from '@tiptap/extension-underline'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TableHeader } from '@tiptap/extension-table-header'
 import { useEffect, useRef } from 'react'
 import { RichTextStyle } from '../../lib/tiptap-extensions'
 import { useEditorStore } from '../../store'
@@ -36,6 +40,15 @@ const extensions = [
   AsyncImage.configure({
     allowBase64: true,
   }),
+  Table.configure({
+    resizable: true,
+    HTMLAttributes: {
+      class: 'kn-table',
+    },
+  }),
+  TableRow,
+  TableHeader,
+  TableCell,
 ]
 
 export function TipTapEditor({ block, slideId, isEditing }: TipTapEditorProps) {

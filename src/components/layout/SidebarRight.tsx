@@ -2164,6 +2164,30 @@ export function SidebarRight() {
                   {/* ── 样式 ──────────────────────────────────────────── */}
                   {formatTab === 'style' && (
                     <>
+                      {/* ── Table Settings ─────────────────────────────── */}
+                      {activeBlock.type === 'table' && (
+                        <KNPanel title="表格">
+                          <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addRowBefore().run()} style={{ flex: 1 }}>向上加行</button>
+                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addRowAfter().run()} style={{ flex: 1 }}>向下加行</button>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addColumnBefore().run()} style={{ flex: 1 }}>向左加列</button>
+                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addColumnAfter().run()} style={{ flex: 1 }}>向右加列</button>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().deleteRow().run()} style={{ flex: 1 }}>删除该行</button>
+                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().deleteColumn().run()} style={{ flex: 1 }}>删除该列</button>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().mergeCells().run()} style={{ flex: 1 }}>合并单元格</button>
+                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().splitCell().run()} style={{ flex: 1 }}>拆分单元格</button>
+                            </div>
+                          </div>
+                        </KNPanel>
+                      )}
+
                       {/* ── Fill ─────────────────────────────────────── */}
                       <KNPanel title="填充">
                         <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -2615,7 +2639,7 @@ export function SidebarRight() {
                     </div>
                   ) : (
                     <div className="kn2-anim-panel" style={{ padding: '0 12px 16px' }}>
-                      <KNPanel title={isActionTab ? `设置 (动作 ${actionList.findIndex(a => a.id === activeAnimation.id) + 1})` : "动画设置"} defaultOpen={true}>
+                      <KNPanel title={isActionTab ? `设置 (动作 ${actionList.findIndex(a => 'id' in a && 'id' in activeAnimation && a.id === activeAnimation.id) + 1})` : "动画设置"} defaultOpen={true}>
                         <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                           {/* Effect + preview */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

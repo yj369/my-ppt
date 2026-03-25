@@ -1192,12 +1192,16 @@ body.play-mode .editor-block {
 
 /* For surface blocks: reset the tpl-wrapper's own background to avoid double-layer */
 .tpl-wrapper--bullet, .tpl-wrapper--quote, .tpl-wrapper--stat,
-.tpl-wrapper--image, .tpl-wrapper--video, .tpl-wrapper--table,
+.tpl-wrapper--image, .tpl-wrapper--video,
 .tpl-wrapper--chart, .tpl-wrapper--timeline, .tpl-wrapper--3d {
   background: none !important;
   border: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
+}
+
+.tpl-wrapper--table {
+  padding: 22px;
 }
 
 /* Note: Oval and Rectangular Callout shaping is now handled dynamically via --block-mask-image SVG data URIs injected by BlockRenderer.tsx. This ensures pixel-perfect scalable curves without transparency overlaps. */

@@ -193,10 +193,37 @@ export type Slide = {
 }
 
 export type PresentationSnapshot = {
-  presentationName: string
+  name: string
   theme: PresentationTheme
   slides: Slide[]
   currentSlideId: string | null
   showGrid: boolean
   showGuides: boolean
+}
+
+export type ProjectMetadata = {
+  id: string
+  name: string
+  createdAt: number
+  updatedAt: number
+  thumbnail?: string // Base64 or URL
+}
+
+export type Project = ProjectMetadata & PresentationSnapshot
+
+export type ConfirmDialogOptions = {
+  title: string
+  message: string
+  confirmLabel?: string
+  cancelLabel?: string
+  isDestructive?: boolean
+}
+
+export type ToastType = 'success' | 'error' | 'info' | 'warning'
+
+export type Toast = {
+  id: string
+  type: ToastType
+  message: string
+  duration?: number
 }

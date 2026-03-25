@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
 import type { Editor } from '@tiptap/react'
+import { db } from '../lib/db'
 import {
   moveSlideBlockAnimation,
   normalizeBlockAnimations,
@@ -27,6 +28,7 @@ import type {
   InspectorTab,
   PresentationSnapshot,
   PresentationTheme,
+  Project,
   Slide,
   SlideLayout,
   TriggerType,
@@ -44,7 +46,8 @@ type BlockUpdateBatch = Array<{
 }>
 
 export type EditorState = {
-  presentationName: string
+  projectId: string | null
+  name: string
   theme: PresentationTheme
   slides: Slide[]
   currentSlideId: string | null
@@ -61,6 +64,8 @@ export type EditorState = {
   camX: number
   camY: number
   camZoom: number
+
+  setProjectId: (id: string | null) => void
   addSlide: (layout?: SlideLayout) => void
   duplicateSlide: (id: string) => void
   deleteSlide: (id: string) => void
@@ -72,7 +77,7 @@ export type EditorState = {
   updateNotes: (id: string, notes: string) => void
   updatePresentation: (
     updates: Partial<
-      Pick<EditorState, 'presentationName' | 'theme' | 'showGrid' | 'showGuides'>
+      Pick<EditorState, 'name' | 'theme' | 'showGrid' | 'showGuides'>
     >,
   ) => void
   importPresentation: (snapshot: PresentationSnapshot) => void
@@ -121,6 +126,20 @@ export type EditorState = {
   nextSlide: () => void
   previousSlide: () => void
   setCam: (x: number, y: number, zoom: number) => void
+  updateThumbnail: (thumbnail: string) => void
+  
+  // 全局确认对话框
+  confirmDialog: {
+    isOpen: boolean
+    options: import('../types/editor').ConfirmDialogOptions
+    resolve: (value: boolean) => void
+  } | null
+  confirm: (options: import('../types/editor').ConfirmDialogOptions) => Promise<boolean>
+
+  // 全局 Toast
+  toasts: import('../types/editor').Toast[]
+  addToast: (message: string, type?: import('../types/editor').ToastType, duration?: number) => void
+  removeToast: (id: string) => void
 }
 
 function reorder<T>(items: T[], fromIndex: number, toIndex: number) {
@@ -175,7 +194,7 @@ function buildSelectionState(
 
 function getSnapshot(state: EditorState): PresentationSnapshot {
   return {
-    presentationName: state.presentationName,
+    name: state.name,
     theme: state.theme,
     slides: state.slides,
     currentSlideId: state.currentSlideId,
@@ -208,8 +227,9 @@ function loadInitialSnapshot() {
 
 const initialSnapshot = loadInitialSnapshot()
 
-export const useEditorStore = create<EditorState>((set) => ({
-  presentationName: initialSnapshot.presentationName,
+export const useEditorStore = create<EditorState>((set, get) => ({
+  projectId: null,
+  name: initialSnapshot.name,
   theme: initialSnapshot.theme,
   slides: initialSnapshot.slides,
   currentSlideId: initialSnapshot.currentSlideId,
@@ -225,6 +245,43 @@ export const useEditorStore = create<EditorState>((set) => ({
   camX: 0,
   camY: 0,
   camZoom: 1,
+
+  confirmDialog: null,
+  confirm: (options) => {
+    return new Promise((resolve) => {
+      set({
+        confirmDialog: {
+          isOpen: true,
+          options,
+          resolve: (val) => {
+            set({ confirmDialog: null })
+            resolve(val)
+          },
+        },
+      })
+    })
+  },
+
+  toasts: [],
+  addToast: (message, type = 'info', duration = 3000) => {
+    const id = uuidv4()
+    set((state) => ({
+      toasts: [...state.toasts, { id, message, type, duration }],
+    }))
+
+    if (duration > 0) {
+      setTimeout(() => {
+        get().removeToast(id)
+      }, duration)
+    }
+  },
+  removeToast: (id) => {
+    set((state) => ({
+      toasts: state.toasts.filter((t) => t.id !== id),
+    }))
+  },
+
+  setProjectId: (id) => set({ projectId: id }),
   addSlide: (layout = 'blank') =>
     set((state) => {
       const currentIndex = state.currentSlideId
@@ -355,17 +412,15 @@ export const useEditorStore = create<EditorState>((set) => ({
     })),
   updatePresentation: (updates) =>
     set((state) => ({
-      ...('presentationName' in updates ? { presentationName: updates.presentationName ?? state.presentationName } : {}),
-      ...('theme' in updates ? { theme: updates.theme ?? state.theme } : {}),
-      ...('showGrid' in updates ? { showGrid: updates.showGrid ?? state.showGrid } : {}),
-      ...('showGuides' in updates ? { showGuides: updates.showGuides ?? state.showGuides } : {}),
+      ...state,
+      ...updates,
     })),
   importPresentation: (snapshot) =>
     set(() => {
       const normalized = normalizePresentationSnapshot(snapshot)
 
       return {
-        presentationName: normalized.presentationName,
+        name: normalized.name,
         theme: normalized.theme,
         slides: normalized.slides,
         currentSlideId: normalized.currentSlideId ?? normalized.slides[0]?.id ?? null,
@@ -382,7 +437,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   resetPresentation: () => {
     const demo = normalizePresentationSnapshot(createDemoPresentation())
     set(() => ({
-      presentationName: demo.presentationName,
+      name: demo.name,
       theme: demo.theme,
       slides: demo.slides,
       currentSlideId: demo.currentSlideId,
@@ -806,11 +861,35 @@ export const useEditorStore = create<EditorState>((set) => ({
       }
     }),
   setCam: (camX, camY, camZoom) => set(() => ({ camX, camY, camZoom })),
+  updateThumbnail: (thumbnail) => set((state) => {
+    if (state.projectId) {
+      db.projects.update(state.projectId, { thumbnail, updatedAt: Date.now() })
+    }
+    return state
+  }),
 }))
 
 if (typeof window !== 'undefined') {
+  let saveTimeout: ReturnType<typeof setTimeout> | null = null
+
   useEditorStore.subscribe((state) => {
+    // 1. Always save to localStorage as a quick recovery/legacy support
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(getSnapshot(state)))
+
+    // 2. If projectId is set, debounced save to IndexedDB
+    if (state.projectId) {
+      if (saveTimeout) clearTimeout(saveTimeout)
+      saveTimeout = setTimeout(async () => {
+        const snapshot = getSnapshot(state)
+        const project = await db.projects.get(state.projectId!)
+        if (project) {
+          await db.projects.update(state.projectId!, {
+            ...snapshot,
+            updatedAt: Date.now(),
+          })
+        }
+      }, 1000)
+    }
   })
 }
 

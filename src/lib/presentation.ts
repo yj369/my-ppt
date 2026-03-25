@@ -26,59 +26,59 @@ export const THEME_OPTIONS: Array<{
   description: string
   defaultBg: Exclude<SlideBg, 'theme'>
 }> = [
-  { id: 'classic', label: '经典发布', description: '浅色底与强层级，适合商务汇报。', defaultBg: 'paper' },
-  { id: 'studio', label: '暗场舞台', description: '深色画布与高对比聚光，适合发布会。', defaultBg: 'midnight' },
-  { id: 'sunset', label: '日落渐层', description: '暖色渐变背景，适合品牌故事。', defaultBg: 'sunset' },
-  { id: 'paper', label: '编辑白板', description: '中性浅灰，适合内容密集页面。', defaultBg: 'paper' },
+  { id: 'classic', label: '经典商务', description: '清晰的排版与强层级感，适合正式汇报。', defaultBg: 'paper' },
+  { id: 'studio', label: '暗场发布', description: '深色背景与高对比度，适合大场面发布。', defaultBg: 'midnight' },
+  { id: 'sunset', label: '日落余晖', description: '温暖的渐变色调，适合品牌故事。', defaultBg: 'sunset' },
+  { id: 'paper', label: '简约白板', description: '中性浅灰色系，适合内容密集的展示。', defaultBg: 'paper' },
 ]
 
 export const LAYOUT_OPTIONS: Array<{ id: SlideLayout; label: string; description: string }> = [
-  { id: 'title', label: '标题页', description: '标题、说明与主视觉组合。' },
-  { id: 'section', label: '章节页', description: '大标题切页，用于段落过渡。' },
-  { id: 'two-column', label: '双栏内容', description: '左右信息并列展示。' },
-  { id: 'metrics', label: '指标页', description: '数字卡片与图表组合。' },
-  { id: 'media-left', label: '图文页', description: '媒体与文字并排。' },
-  { id: 'blank', label: '空白页', description: '自由构图，自行插入内容。' },
+  { id: 'title', label: '标题页', description: '包含主标题、副标题及视觉重心。' },
+  { id: 'section', label: '章节过渡', description: '用于划分演示文稿的不同段落。' },
+  { id: 'two-column', label: '双栏内容', description: '左右对照，适合展示对比信息。' },
+  { id: 'metrics', label: '数据指标', description: '突出数字卡片与核心图表。' },
+  { id: 'media-left', label: '左图右文', description: '多媒体素材与文字说明并排展示。' },
+  { id: 'blank', label: '空白页面', description: '自由画布，支持完全自定义布局。' },
 ]
 
 export const BACKGROUND_OPTIONS: Array<{ id: SlideBg; label: string }> = [
   { id: 'theme', label: '跟随主题' },
-  { id: 'aurora', label: '极光' },
-  { id: 'midnight', label: '午夜' },
-  { id: 'paper', label: '纸面' },
-  { id: 'sunset', label: '日落' },
+  { id: 'aurora', label: '极光渐变' },
+  { id: 'midnight', label: '深邃午夜' },
+  { id: 'paper', label: '质感纸张' },
+  { id: 'sunset', label: '暖色日落' },
   { id: 'spotlight', label: '聚光灯' },
 ]
 
 export const TRANSITION_OPTIONS = [
-  { id: 'magic', label: '魔幻移动' },
+  { id: 'magic', label: '神奇移动' },
   { id: 'fade', label: '淡入淡出' },
-  { id: 'move-left', label: '从右推进' },
+  { id: 'move-left', label: '向左平移' },
   { id: 'move-up', label: '向上推进' },
-  { id: 'zoom', label: '缩放' },
-  { id: 'dissolve', label: '溶解' },
+  { id: 'zoom', label: '缩放进入' },
+  { id: 'dissolve', label: '溶解转场' },
 ] as const
 
 export const ANIMATION_OPTIONS = BUILD_IN_OPTIONS
 
 export const INSERT_OPTIONS: Array<{ id: ElementType; label: string; category: string }> = [
-  { id: 'heading', label: '标题', category: '文本' },
-  { id: 'body', label: '正文', category: '文本' },
-  { id: 'bullet', label: '项目符号', category: '文本' },
-  { id: 'quote', label: '引用', category: '文本' },
-  { id: 'shape-rect', label: '矩形', category: '形状' },
-  { id: 'shape-rounded', label: '圆角矩形', category: '形状' },
-  { id: 'shape-circle', label: '圆形', category: '形状' },
-  { id: 'shape-triangle', label: '三角形', category: '形状' },
-  { id: 'shape-diamond', label: '菱形', category: '形状' },
-  { id: 'divider', label: '分隔线', category: '形状' },
+  { id: 'heading', label: '大标题', category: '文字' },
+  { id: 'body', label: '正文', category: '文字' },
+  { id: 'bullet', label: '项目列表', category: '文字' },
+  { id: 'quote', label: '引用文字', category: '文字' },
+  { id: 'shape-rect', label: '矩形', category: '图形' },
+  { id: 'shape-rounded', label: '圆角矩形', category: '图形' },
+  { id: 'shape-circle', label: '圆形', category: '图形' },
+  { id: 'shape-triangle', label: '三角形', category: '图形' },
+  { id: 'shape-diamond', label: '菱形', category: '图形' },
+  { id: 'divider', label: '分割线', category: '图形' },
   { id: 'image', label: '图片', category: '媒体' },
-  { id: 'video', label: '视频占位', category: '媒体' },
-  { id: 'table', label: '表格', category: '数据' },
-  { id: 'chart', label: '图表', category: '数据' },
-  { id: 'stat', label: '数字卡片', category: '数据' },
-  { id: 'timeline', label: '时间线', category: '布局' },
-  { id: '3d', label: '3D 组件', category: '媒体' },
+  { id: 'video', label: '视频', category: '媒体' },
+  { id: 'table', label: '数据表', category: '工具' },
+  { id: 'chart', label: '统计图', category: '工具' },
+  { id: 'stat', label: '数字卡片', category: '工具' },
+  { id: 'timeline', label: '时间轴', category: '布局' },
+  { id: '3d', label: '3D组件', category: '媒体' },
 ]
 
 const baseAppearance = (textColor = '#f7f7fb'): BlockAppearance => ({

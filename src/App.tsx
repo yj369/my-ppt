@@ -1,23 +1,19 @@
-import { CanvasViewport } from './components/canvas/CanvasViewport'
-import { PlayModeController } from './components/canvas/PlayModeController'
-import { SidebarLeft } from './components/layout/SidebarLeft'
-import { SidebarRight } from './components/layout/SidebarRight'
-import { Toolbar } from './components/layout/Toolbar'
-import { useEditorStore } from './store'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { DashboardPage } from './pages/DashboardPage'
+import { EditorPage } from './pages/EditorPage'
+import { ConfirmDialog } from './components/layout/ConfirmDialog'
+import { ToastContainer } from './components/layout/ToastContainer'
 
 function App() {
-  const isPlayMode = useEditorStore((state) => state.isPlayMode)
-
   return (
-    <>
-      <PlayModeController />
-      {!isPlayMode && <Toolbar />}
-      <div className={`workspace ${isPlayMode ? 'workspace--play' : ''}`}>
-        {!isPlayMode && <SidebarLeft />}
-        <CanvasViewport />
-        {!isPlayMode && <SidebarRight />}
-      </div>
-    </>
+    <BrowserRouter>
+      <ConfirmDialog />
+      <ToastContainer />
+      <Routes>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/editor/:id" element={<EditorPage />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 

@@ -245,14 +245,84 @@ textarea {
   min-width: 0;
 }
 
-.brand-copy strong {
-  font-size: 14px;
-  font-weight: 600;
-}
-
 .brand-copy span {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.toolbar-document-name-input {
+  width: 100%;
+  padding: 2px 6px;
+  margin-left: -6px;
+  font-size: 14px;
+  font-weight: 700;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text);
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.toolbar-document-name-input:hover {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+.toolbar-document-name-input:focus {
+  background: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* 全局动画定义 */
+@keyframes confirm-pop {
+  0% { opacity: 0; transform: scale(0.9) translateY(20px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes mask-fade {
+  0% { opacity: 0; backdrop-filter: blur(0px); }
+  100% { opacity: 1; backdrop-filter: blur(12px); }
+}
+
+@keyframes toast-in {
+  0% { opacity: 0; transform: translateY(-40px) scale(0.9); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toast-out {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-20px) scale(0.95); }
+}
+
+.animate-confirm {
+  animation: confirm-pop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-mask {
+  animation: mask-fade 0.3s ease forwards;
+}
+
+.animate-toast {
+  animation: toast-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Dashboard 卡片入场动画 */
+@keyframes card-in {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px) scale(0.98); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
+  }
+}
+
+.stagger-item {
+  opacity: 0;
+  animation: card-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .toolbar-btn,

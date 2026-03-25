@@ -1,5 +1,6 @@
 import type { DragEvent, MouseEvent, WheelEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
+import html2canvas from 'html2canvas'
 import { getSelectionIdsForRect, normalizeSelectionRect, uniqueIds, type SelectionRect } from '../../lib/selection'
 import { SLIDE_HEIGHT, SLIDE_WIDTH } from '../../lib/presentation'
 import { useEditorStore } from '../../store'
@@ -39,12 +40,41 @@ export function CanvasViewport() {
     setActiveBlock,
     setSelectedBlocks,
     deleteSlide,
+    updateThumbnail,
+    confirm,
   } = useEditorStore()
+
+  const currentSlide = slides.find((slide) => slide.id === currentSlideId) ?? null
+  const isFirstSlide = slides[0]?.id === currentSlideId
+
+  // 缩略图生成逻辑
+  useEffect(() => {
+    if (isPlayMode || !currentSlideId || !isFirstSlide) return
+
+    const timer = setTimeout(async () => {
+      const element = document.getElementById('slideFrame')
+      if (element) {
+        try {
+          const canvas = await html2canvas(element, {
+            scale: 0.25, // 缩略图不需要太大
+            backgroundColor: null,
+            useCORS: true,
+            logging: false,
+          })
+          const dataUrl = canvas.toDataURL('image/webp', 0.8)
+          updateThumbnail(dataUrl)
+        } catch (err) {
+          console.error('生成缩略图失败:', err)
+        }
+      }
+    }, 1500) // 延迟生成，等待动画或渲染完成
+
+    return () => clearTimeout(timer)
+  }, [currentSlideId, currentSlide?.blocks.length, currentSlide?.bg, updateThumbnail, isPlayMode])
 
   const viewportRef = useRef<HTMLElement>(null)
   const [isPanning, setIsPanning] = useState(false)
   const [spacePressed, setSpacePressed] = useState(false)
-  const [isDeletingSlide, setIsDeletingSlide] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   const [camStart, setCamStart] = useState({ x: 0, y: 0 })
   const [marqueeRect, setMarqueeRect] = useState<SelectionRect | null>(null)
@@ -55,7 +85,6 @@ export function CanvasViewport() {
     baseSelection: string[]
   } | null>(null)
   const suppressCanvasClickRef = useRef(false)
-  const currentSlide = slides.find((slide) => slide.id === currentSlideId) ?? null
 
   const fitCanvasCenter = (playMode = false) => {
     const viewport = viewportRef.current
@@ -145,7 +174,18 @@ export function CanvasViewport() {
       if ((event.key === 'Backspace' || event.key === 'Delete') && state.currentSlideId && state.selectedBlockIds.length === 0) {
         if (state.slides.length > 1) {
           event.preventDefault()
-          setIsDeletingSlide(true)
+          const run = async () => {
+            const ok = await confirm({
+              title: '确认删除幻灯片',
+              message: '您确定要删除当前幻灯片吗？此操作将移除该页面的所有内容且无法撤销。',
+              confirmLabel: '确认删除',
+              isDestructive: true,
+            })
+            if (ok && state.currentSlideId) {
+              deleteSlide(state.currentSlideId)
+            }
+          }
+          run()
         }
         return
       }
@@ -472,72 +512,6 @@ export function CanvasViewport() {
           <span>{Math.round(camZoom * 100)}%</span>
           <button onClick={() => adjustZoom(0.1)}>放大</button>
           <button onClick={() => fitCanvasCenter(false)}>适应屏幕</button>
-        </div>
-      )}
-
-      {isDeletingSlide && (
-        <div style={{
-          position: 'absolute',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(15, 23, 42, 0.4)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100,
-          animation: 'fadeIn 0.2s ease'
-        }}>
-          <div style={{
-            background: 'white',
-            borderRadius: '16px',
-            padding: '32px',
-            width: '380px',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(15, 23, 42, 0.05)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '24px',
-            position: 'relative',
-            animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-          }}>
-            <button 
-              onClick={() => setIsDeletingSlide(false)}
-              style={{ position: 'absolute', top: '16px', right: '16px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
-            >
-              <X size={18} />
-            </button>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '16px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
-                <AlertTriangle size={24} />
-              </div>
-              <div>
-                <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>确定要删除当前幻灯片吗？</h3>
-                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  您正在尝试删除包含内容的演示页面。此操作一旦执行将无法轻易撤销。
-                </p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-              <button 
-                onClick={() => setIsDeletingSlide(false)}
-                style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--surface-sunken)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
-                onMouseEnter={(e) => (e.target as HTMLElement).style.background = 'var(--surface)' }
-                onMouseLeave={(e) => (e.target as HTMLElement).style.background = 'var(--surface-sunken)' }
-              >
-                取消
-              </button>
-              <button 
-                onClick={() => {
-                  if (currentSlideId) deleteSlide(currentSlideId)
-                  setIsDeletingSlide(false)
-                }}
-                style={{ flex: 1, padding: '10px', borderRadius: '8px', background: '#ef4444', border: 'none', color: 'white', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)' }}
-                onMouseEnter={(e) => (e.target as HTMLElement).style.background = '#dc2626' }
-                onMouseLeave={(e) => (e.target as HTMLElement).style.background = '#ef4444' }
-              >
-                确认删除
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </main>

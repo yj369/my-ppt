@@ -1,5 +1,6 @@
 import type { ChangeEvent } from 'react'
 import { useRef, useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Download,
   FileImage,
@@ -14,6 +15,7 @@ import {
   Link as LinkIcon,
   Image as ImageIcon,
   Smile,
+  Home,
 } from 'lucide-react'
 import { exportPresentationSnapshot, useEditorStore } from '../../store'
 import type { PresentationSnapshot } from '../../types/editor'
@@ -21,6 +23,7 @@ import { saveLocalImage, getImageDimensions, calculateFitDimensions } from '../.
 import { IconPicker } from './IconPicker'
 
 export function Toolbar() {
+  const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageUploadRef = useRef<HTMLInputElement>(null)
   
@@ -36,11 +39,41 @@ export function Toolbar() {
   const iconMenuRef = useRef<HTMLDivElement>(null)
 
   const {
-    presentationName,
+    name,
     slides,
     insertBlock,
     togglePlayMode,
+    updatePresentation,
+    addToast,
   } = useEditorStore()
+
+  // 增加本地名称状态以优化更名体验
+  const [localName, setLocalName] = useState(name)
+
+  // 当外部 name 变化时（如导入或撤销），同步本地状态
+  useEffect(() => {
+    setLocalName(name)
+  }, [name])
+
+  const handleNameSave = () => {
+    const trimmedName = localName.trim()
+    if (trimmedName && trimmedName !== name) {
+      updatePresentation({ name: trimmedName })
+      addToast('演示文稿名称已更新', 'success', 2000)
+    } else {
+      setLocalName(name) // 恢复原名
+    }
+  }
+
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation()
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur()
+    } else if (e.key === 'Escape') {
+      setLocalName(name)
+      setTimeout(() => (e.target as HTMLInputElement).blur(), 0)
+    }
+  }
 
   const handleExport = () => {
     const snapshot = exportPresentationSnapshot()
@@ -53,6 +86,7 @@ export function Toolbar() {
     link.download = `${snapshot.presentationName || 'presentation'}.json`
     link.click()
     URL.revokeObjectURL(url)
+    addToast('演示文稿已成功导出', 'success')
   }
 
   const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -69,8 +103,9 @@ export function Toolbar() {
       }
 
       useEditorStore.getState().importPresentation(parsed)
+      addToast('成功导入演示文稿', 'success')
     } catch {
-      window.alert('导入失败：请选择由当前编辑器导出的 JSON 文件。')
+      addToast('导入失败，请选择有效的文稿文件', 'error')
     } finally {
       event.target.value = ''
     }
@@ -151,12 +186,33 @@ export function Toolbar() {
 
   return (
     <header className="app-toolbar">
+      <div className="toolbar-section" style={{ paddingLeft: '8px' }}>
+        <button 
+          className="toolbar-btn toolbar-btn--compact" 
+          onClick={() => navigate('/')}
+          title="Back to Dashboard"
+        >
+          <Home size={18} />
+        </button>
+      </div>
+
+      <div className="toolbar-divider" />
+
       <div className="toolbar-document">
         <div className="toolbar-document__icon">
           <Presentation size={16} />
         </div>
         <div className="brand-copy">
-          <strong>{presentationName}</strong>
+          <input
+            type="text"
+            className="toolbar-document-name-input"
+            value={localName}
+            onChange={(e) => setLocalName(e.target.value)}
+            onBlur={handleNameSave}
+            onKeyDown={handleNameKeyDown}
+            placeholder="未命名演示文稿"
+            spellCheck={false}
+          />
           <span>{slides.length} 页</span>
         </div>
       </div>

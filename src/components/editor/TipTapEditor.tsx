@@ -1,4 +1,5 @@
 import { useEditor, EditorContent } from '@tiptap/react'
+import { Document } from '@tiptap/extension-document'
 import StarterKit from '@tiptap/starter-kit'
 import FontFamily from '@tiptap/extension-font-family'
 import TextAlign from '@tiptap/extension-text-align'
@@ -11,7 +12,7 @@ import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { RichTextStyle } from '../../lib/tiptap-extensions'
 import { useEditorStore } from '../../store'
 import type { EditorBlock } from '../../types/editor'
@@ -23,39 +24,52 @@ type TipTapEditorProps = {
   isEditing: boolean
 }
 
-const extensions = [
-  StarterKit,
-  RichTextStyle,
-  FontFamily,
-  Underline,
-  Subscript,
-  Superscript,
-  Highlight.configure({ multicolor: true }),
-  TextAlign.configure({
-    types: ['heading', 'paragraph'],
-  }),
-  Placeholder.configure({
-    placeholder: '输入文本...',
-  }),
-  AsyncImage.configure({
-    allowBase64: true,
-  }),
-  Table.configure({
-    resizable: true,
-    HTMLAttributes: {
-      class: 'kn-table',
-    },
-  }),
-  TableRow,
-  TableHeader,
-  TableCell,
-]
+const TableDocument = Document.extend({
+  content: 'table',
+})
+
+const getExtensions = (blockType: string) => {
+  const isTable = blockType === 'table'
+
+  const baseExtensions = [
+    isTable ? StarterKit.configure({ document: false }) : StarterKit,
+    ...(isTable ? [TableDocument] : []),
+    RichTextStyle,
+    FontFamily,
+    Underline,
+    Subscript,
+    Superscript,
+    Highlight.configure({ multicolor: true }),
+    TextAlign.configure({
+      types: ['heading', 'paragraph'],
+    }),
+    Placeholder.configure({
+      placeholder: isTable ? '' : '输入文本...',
+    }),
+    AsyncImage.configure({
+      allowBase64: true,
+    }),
+    Table.configure({
+      resizable: true,
+      HTMLAttributes: {
+        class: 'kn-table',
+      },
+    }),
+    TableRow,
+    TableHeader,
+    TableCell,
+  ]
+
+  return baseExtensions
+}
 
 export function TipTapEditor({ block, slideId, isEditing }: TipTapEditorProps) {
   const updateBlock = useEditorStore((state) => state.updateBlock)
   const activeBlockId = useEditorStore((state) => state.activeBlockId)
   const setActiveEditor = useEditorStore((state) => state.setActiveEditor)
   const lastContentRef = useRef(block.content)
+
+  const extensions = useMemo(() => getExtensions(block.type), [block.type])
 
   const editor = useEditor({
     extensions,

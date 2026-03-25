@@ -2166,23 +2166,28 @@ export function SidebarRight() {
                     <>
                       {/* ── Table Settings ─────────────────────────────── */}
                       {activeBlock.type === 'table' && (
-                        <KNPanel title="表格">
-                          <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addRowBefore().run()} style={{ flex: 1 }}>向上加行</button>
-                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addRowAfter().run()} style={{ flex: 1 }}>向下加行</button>
+                        <KNPanel title="表格设置">
+                          <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <div>
+                              <div className="kn2-hint" style={{ marginBottom: 4 }}>插入</div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addRowBefore().run()}>上方加行</button>
+                                <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addRowAfter().run()}>下方加行</button>
+                                <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addColumnBefore().run()}>左侧加列</button>
+                                <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addColumnAfter().run()}>右侧加列</button>
+                              </div>
                             </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addColumnBefore().run()} style={{ flex: 1 }}>向左加列</button>
-                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addColumnAfter().run()} style={{ flex: 1 }}>向右加列</button>
-                            </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().deleteRow().run()} style={{ flex: 1 }}>删除该行</button>
-                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().deleteColumn().run()} style={{ flex: 1 }}>删除该列</button>
-                            </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().mergeCells().run()} style={{ flex: 1 }}>合并单元格</button>
-                              <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().splitCell().run()} style={{ flex: 1 }}>拆分单元格</button>
+
+                            <div style={{ height: 1, background: 'var(--divider)', margin: '4px 0' }} />
+
+                            <div>
+                              <div className="kn2-hint" style={{ marginBottom: 4 }}>单元格与删除</div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().mergeCells().run()}>合并</button>
+                                <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().splitCell().run()}>拆分</button>
+                                <button className="kn2-btn kn2-btn--secondary" style={{ color: '#ef4444' }} onClick={() => activeEditor?.chain().focus().deleteRow().run()}>删行</button>
+                                <button className="kn2-btn kn2-btn--secondary" style={{ color: '#ef4444' }} onClick={() => activeEditor?.chain().focus().deleteColumn().run()}>删列</button>
+                              </div>
                             </div>
                           </div>
                         </KNPanel>

@@ -1,5 +1,5 @@
 import { useEditor, EditorContent } from '@tiptap/react'
-import { Document } from '@tiptap/extension-document'
+import Document from '@tiptap/extension-document'
 import StarterKit from '@tiptap/starter-kit'
 import FontFamily from '@tiptap/extension-font-family'
 import TextAlign from '@tiptap/extension-text-align'

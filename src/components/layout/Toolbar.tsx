@@ -2,14 +2,12 @@ import type { ChangeEvent } from 'react'
 import { useRef, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Download,
   FileImage,
   Play,
   Presentation,
   Shapes,
   Table2,
   Type,
-  Upload,
   Circle,
   Triangle,
   Link as LinkIcon,
@@ -17,14 +15,12 @@ import {
   Smile,
   Home,
 } from 'lucide-react'
-import { exportPresentationSnapshot, useEditorStore } from '../../store'
-import type { PresentationSnapshot } from '../../types/editor'
+import { useEditorStore } from '../../store'
 import { saveLocalImage, getImageDimensions, calculateFitDimensions } from '../../lib/imageStorage'
 import { IconPicker } from './IconPicker'
 
 export function Toolbar() {
   const navigate = useNavigate()
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const imageUploadRef = useRef<HTMLInputElement>(null)
   
   const [isShapeMenuOpen, setShapeMenuOpen] = useState(false)
@@ -75,43 +71,8 @@ export function Toolbar() {
     }
   }
 
-  const handleExport = () => {
-    const snapshot = exportPresentationSnapshot()
-    const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
-      type: 'application/json;charset=utf-8',
-    })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${snapshot.presentationName || 'presentation'}.json`
-    link.click()
-    URL.revokeObjectURL(url)
-    addToast('演示文稿已成功导出', 'success')
-  }
-
-  const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) {
-      return
-    }
-
-    try {
-      const text = await file.text()
-      const parsed = JSON.parse(text) as PresentationSnapshot
-      if (!Array.isArray(parsed.slides) || parsed.slides.length === 0) {
-        throw new Error('无效文件')
-      }
-
-      useEditorStore.getState().importPresentation(parsed)
-      addToast('成功导入演示文稿', 'success')
-    } catch {
-      addToast('导入失败，请选择有效的文稿文件', 'error')
-    } finally {
-      event.target.value = ''
-    }
-  }
-
   useEffect(() => {
+
     const handleOutsideClick = (e: MouseEvent) => {
       const target = e.target as Node
       if (isShapeMenuOpen && shapeMenuRef.current && !shapeMenuRef.current.contains(target)) {
@@ -478,18 +439,6 @@ export function Toolbar() {
       <div className="toolbar-spacer" />
 
       <div className="toolbar-section toolbar-section--end">
-        <button className="toolbar-btn toolbar-btn--compact" onClick={handleExport}>
-          <Download size={16} />
-          <span>导出</span>
-        </button>
-        <button
-          className="toolbar-btn toolbar-btn--compact"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Upload size={16} />
-          <span>导入</span>
-        </button>
-        <div className="toolbar-section-divider" />
         <button
           className="toolbar-btn toolbar-btn--compact toolbar-btn--play"
           onClick={() => togglePlayMode(true)}
@@ -497,13 +446,6 @@ export function Toolbar() {
           <Play size={16} />
           <span>播放</span>
         </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json"
-          hidden
-          onChange={handleImport}
-        />
       </div>
     </header>
   )

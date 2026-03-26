@@ -1400,6 +1400,21 @@ body.play-mode .editor-block {
   border-radius: calc(var(--block-radius, 24px) - 4px);
 }
 
+/* Ensure image block contents take up the full space */
+.tpl-wrapper--image,
+.tpl-wrapper--image .kn2-tiptap-container,
+.tpl-wrapper--image .ProseMirror,
+.tpl-wrapper--image .ProseMirror p {
+  width: 100%;
+  height: 100%;
+  display: flex;
+}
+
+.tpl-wrapper--image .ProseMirror {
+  margin: 0;
+  padding: 0;
+}
+
 .editor-block[data-type="image"] .ProseMirror img {
   width: 100%;
   height: 100%;

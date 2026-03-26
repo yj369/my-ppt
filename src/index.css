@@ -1190,6 +1190,11 @@ body.play-mode .editor-block {
   /* Reset the outer wrapper's box-model so only this inner element shows the background */
 }
 
+.kn-table-wrap {
+  overflow: hidden;
+  isolation: isolate;
+}
+
 /* For surface blocks: reset the tpl-wrapper's own background to avoid double-layer */
 .tpl-wrapper--bullet, .tpl-wrapper--quote, .tpl-wrapper--stat,
 .tpl-wrapper--image, .tpl-wrapper--video,
@@ -1204,23 +1209,37 @@ body.play-mode .editor-block {
   /* Tables dictate their own internal structure, so no block padding */
   padding: 0;
   display: flex;
+  overflow: hidden;
+  isolation: isolate;
 }
 
 /* Ensure TipTap container fits the table precisely */
 .tpl-wrapper--table .kn2-tiptap-container {
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
 }
 
 .tpl-wrapper--table .ProseMirror {
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.tpl-wrapper--table .tableWrapper {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
 }
 
 .tpl-wrapper--table .kn-table {
   height: 100%;
   margin: 0;
+  background: transparent;
 }
 
 /* Note: Oval and Rectangular Callout shaping is now handled dynamically via --block-mask-image SVG data URIs injected by BlockRenderer.tsx. This ensures pixel-perfect scalable curves without transparency overlaps. */
@@ -1473,6 +1492,7 @@ body.play-mode .editor-block {
   border-collapse: collapse;
   font-size: 14px;
   table-layout: fixed;
+  background: transparent;
 }
 
 .kn-table th,
@@ -6529,6 +6549,213 @@ body.play-mode .rotate-link {
 .kn2-image-warning svg {
   flex: none;
   margin-top: 1px;
+}
+
+.kn2-table-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 4px;
+}
+
+.kn2-table-summary,
+.kn2-table-card,
+.kn2-table-field-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--kn2-border-subtle);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: var(--kn2-shadow-sm);
+}
+
+.kn2-table-summary__head,
+.kn2-table-card__head,
+.kn2-table-field-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.kn2-table-summary__copy,
+.kn2-table-card__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kn2-table-summary__title,
+.kn2-table-card__title {
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--kn2-ink);
+}
+
+.kn2-table-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kn2-table-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--kn2-border-subtle);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--kn2-ink-2);
+  white-space: nowrap;
+}
+
+.kn2-table-chip--accent {
+  border-color: rgba(0, 122, 255, 0.16);
+  background: rgba(0, 122, 255, 0.1);
+  color: var(--kn2-accent);
+}
+
+.kn2-table-chip--muted {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--kn2-ink-3);
+}
+
+.kn2-table-chip--danger {
+  border-color: rgba(255, 59, 48, 0.16);
+  background: rgba(255, 59, 48, 0.08);
+  color: var(--kn2-red);
+}
+
+.kn2-table-callout {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(0, 122, 255, 0.06);
+  color: var(--kn2-ink-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.kn2-table-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kn2-table-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.kn2-table-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--kn2-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--kn2-shadow-sm);
+  text-align: left;
+  transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+}
+
+.kn2-table-action:hover:not(:disabled) {
+  border-color: rgba(0, 122, 255, 0.32);
+  background: rgba(0, 122, 255, 0.04);
+  transform: translateY(-1px);
+}
+
+.kn2-table-action:disabled {
+  opacity: 0.46;
+  cursor: default;
+  transform: none;
+}
+
+.kn2-table-action--danger:hover:not(:disabled) {
+  border-color: rgba(255, 59, 48, 0.24);
+  background: rgba(255, 59, 48, 0.05);
+}
+
+.kn2-table-action__eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--kn2-ink-4);
+}
+
+.kn2-table-action__title {
+  font-size: 14px;
+  line-height: 1.25;
+  color: var(--kn2-ink);
+}
+
+.kn2-table-action__detail {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--kn2-ink-3);
+}
+
+.kn2-table-field-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.kn2-table-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.kn2-table-control-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--kn2-border-subtle);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.kn2-table-control-card--full {
+  grid-column: 1 / -1;
+}
+
+.kn2-table-control-card__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--kn2-ink-4);
+}
+
+.kn2-table-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kn2-table-color-row input[type='color'] {
+  width: 44px;
+  min-width: 44px;
+  height: 36px;
+  padding: 4px;
+}
+
+.kn2-table-danger {
+  padding-top: 2px;
 }
 
 .kn2-group-actions {

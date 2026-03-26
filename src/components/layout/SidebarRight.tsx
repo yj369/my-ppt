@@ -23,7 +23,7 @@ import {
   X,
   Link2,
 } from 'lucide-react'
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { previewBlockPhase, restoreBlockAfterPreview } from '../../lib/animation-runtime'
 import {
@@ -43,6 +43,12 @@ import {
   getImageScalePercent,
   isImageUpscaled,
 } from '../../lib/imageBlock'
+import {
+  getTableBlockMetrics,
+  getTableSelectionInfo,
+  type TableSelectionInfo,
+  type TableSelectionKind,
+} from '../../lib/tableBlock'
 import {
   BACKGROUND_OPTIONS,
   LAYOUT_OPTIONS,
@@ -137,6 +143,16 @@ function applyRichTextTextStroke(
   return true
 }
 
+function applyTableCellAttribute(
+  activeEditor: Editor | null,
+  name: string,
+  value: string | number | null,
+) {
+  if (!activeEditor) return false
+  activeEditor.chain().focus().setCellAttribute(name, value).run()
+  return true
+}
+
 function preventMouseFocusSteal(event: React.MouseEvent<HTMLElement>) {
   const target = event.target as HTMLElement
   if (target.closest('input, select, textarea, [contenteditable="true"]')) return
@@ -220,6 +236,14 @@ type TextInspectorState = {
   hasSelection: boolean
   styles: SelectedTextStyles | null
   baseFontSize: number | null
+}
+
+function getTableSelectionLabel(kind: TableSelectionKind) {
+  if (kind === 'table') return '整张表'
+  if (kind === 'row') return '整行'
+  if (kind === 'column') return '整列'
+  if (kind === 'cell-range') return '区域'
+  return '单元格'
 }
 
 const MIXED_CONTROL_VALUE = '__mixed__'
@@ -457,6 +481,50 @@ function KNPanel({
         </div>
       )}
     </div>
+  )
+}
+
+function TableChip({
+  children,
+  tone = 'default',
+}: {
+  children: React.ReactNode
+  tone?: 'default' | 'accent' | 'muted' | 'danger'
+}) {
+  return (
+    <span className={`kn2-table-chip kn2-table-chip--${tone}`}>
+      {children}
+    </span>
+  )
+}
+
+function TableActionCard({
+  eyebrow,
+  title,
+  detail,
+  disabled = false,
+  tone = 'default',
+  onClick,
+}: {
+  eyebrow: string
+  title: string
+  detail?: string
+  disabled?: boolean
+  tone?: 'default' | 'danger'
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className={`kn2-table-action ${tone === 'danger' ? 'kn2-table-action--danger' : ''}`}
+      disabled={disabled}
+      onMouseDown={preventMouseFocusSteal}
+      onClick={onClick}
+    >
+      <span className="kn2-table-action__eyebrow">{eyebrow}</span>
+      <strong className="kn2-table-action__title">{title}</strong>
+      {detail && <span className="kn2-table-action__detail">{detail}</span>}
+    </button>
   )
 }
 
@@ -1372,6 +1440,7 @@ export function SidebarRight() {
     styles: null,
     baseFontSize: null,
   })
+  const [tableInspector, setTableInspector] = useState<TableSelectionInfo | null>(null)
 
   const activeAnimations = activeBlock ? getBlockAnimations(activeBlock) : null
   
@@ -1504,6 +1573,31 @@ export function SidebarRight() {
       activeEditor.off('transaction', syncTextInspector)
     }
   }, [activeEditor])
+
+  const syncTableInspector = useEffectEvent(() => {
+    if (!activeBlock || activeBlock.type !== 'table' || editingTextBlockId !== activeBlock.id || !activeEditor) {
+      setTableInspector(null)
+      return
+    }
+
+    setTableInspector(getTableSelectionInfo(activeEditor))
+  })
+
+  useEffect(() => {
+    if (!activeEditor || activeBlock?.type !== 'table' || editingTextBlockId !== activeBlock.id) {
+      syncTableInspector()
+      return
+    }
+
+    activeEditor.on('selectionUpdate', syncTableInspector)
+    activeEditor.on('transaction', syncTableInspector)
+    syncTableInspector()
+
+    return () => {
+      activeEditor.off('selectionUpdate', syncTableInspector)
+      activeEditor.off('transaction', syncTableInspector)
+    }
+  }, [activeBlock?.id, activeBlock?.type, activeEditor, editingTextBlockId])
 
   useEffect(() => {
     // @ts-ignore
@@ -1814,6 +1908,41 @@ export function SidebarRight() {
   const activeImageIsUpscaled = activeBlock && !isGroupSelection
     ? isImageUpscaled(activeBlock)
     : false
+  const activeTableMetrics = useMemo(
+    () => (!isGroupSelection && activeBlock?.type === 'table' ? getTableBlockMetrics(activeBlock.content) : null),
+    [activeBlock?.content, activeBlock?.type, isGroupSelection],
+  )
+  const isTableEditing = !!(
+    activeBlock
+    && activeBlock.type === 'table'
+    && editingTextBlockId === activeBlock.id
+    && activeEditor
+  )
+  const activeTableContext = tableInspector ?? (activeTableMetrics
+    ? {
+        ...activeTableMetrics,
+        kind: 'table' as const,
+        selectedCellCount: activeTableMetrics.rows * activeTableMetrics.columns,
+        selectionWidth: activeTableMetrics.columns,
+        selectionHeight: activeTableMetrics.rows,
+        canMerge: false,
+        canSplit: false,
+        cell: null,
+      }
+    : null)
+  const activeTableSelectionLabel = activeTableContext
+    ? getTableSelectionLabel(activeTableContext.kind)
+    : null
+  const activeTableSelectionDetail = activeTableContext
+    ? `${activeTableContext.selectionHeight} × ${activeTableContext.selectionWidth}`
+    : null
+  const activeTableCell = tableInspector?.cell ?? null
+  const activeTableCellBackground = activeTableCell?.background ?? ''
+  const activeTableCellBorderColor = activeTableCell?.borderColor ?? 'rgba(148, 163, 184, 0.3)'
+  const activeTableCellPadding = activeTableCell?.padding ?? 12
+  const activeTableCellBorderWidth = activeTableCell?.borderWidth ?? 1
+  const activeTableCellVerticalAlign = activeTableCell?.verticalAlign ?? 'middle'
+  const activeTableCellBorderStyle = activeTableCell?.borderStyle ?? 'solid'
   const activeImageNaturalSizeLabel = activeImage?.naturalWidth && activeImage?.naturalHeight
     ? `${activeImage.naturalWidth} × ${activeImage.naturalHeight} px`
     : '读取中'
@@ -2190,29 +2319,235 @@ export function SidebarRight() {
                   {formatTab === 'style' && (
                     <>
                       {/* ── Table Settings ─────────────────────────────── */}
-                      {activeBlock.type === 'table' && (
-                        <KNPanel title="表格设置">
-                          <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            <div>
-                              <div className="kn2-hint" style={{ marginBottom: 4 }}>插入</div>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                                <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addRowBefore().run()}>上方加行</button>
-                                <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addRowAfter().run()}>下方加行</button>
-                                <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addColumnBefore().run()}>左侧加列</button>
-                                <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().addColumnAfter().run()}>右侧加列</button>
+                      {!isGroupSelection && activeBlock.type === 'table' && (
+                        <KNPanel title="表格">
+                          <div className="kn2-table-stack">
+                            <div className="kn2-table-summary">
+                              <div className="kn2-table-summary__head">
+                                <div className="kn2-table-summary__copy">
+                                  <span className="kn2-section__title">当前选择</span>
+                                  <strong className="kn2-table-summary__title">{activeTableSelectionLabel ?? '整张表'}</strong>
+                                </div>
+                                <TableChip tone={isTableEditing ? 'accent' : 'muted'}>
+                                  {isTableEditing ? '编辑中' : '选择态'}
+                                </TableChip>
+                              </div>
+
+                              <div className="kn2-table-chip-row">
+                                <TableChip>{activeTableContext ? `${activeTableContext.rows} 行 × ${activeTableContext.columns} 列` : '读取中'}</TableChip>
+                                <TableChip>选区 {activeTableSelectionDetail ?? '1 × 1'}</TableChip>
+                                <TableChip>{activeTableContext?.hasHeaderRow ? '首行表头' : '无首行表头'}</TableChip>
+                                <TableChip>{activeTableContext?.hasHeaderColumn ? '首列表头' : '无首列表头'}</TableChip>
+                                {isTableEditing && activeTableCell && activeTableContext?.kind !== 'table' && (
+                                  <>
+                                    <TableChip tone="accent">
+                                      {activeTableCell.isHeader ? '表头单元格' : '内容单元格'}
+                                    </TableChip>
+                                    <TableChip>第 {activeTableCell.row} 行</TableChip>
+                                    <TableChip>第 {activeTableCell.column} 列</TableChip>
+                                    <TableChip>跨度 {activeTableCell.rowSpan} × {activeTableCell.colSpan}</TableChip>
+                                    <TableChip tone="accent">{activeTableContext?.selectedCellCount ?? 1} 格</TableChip>
+                                  </>
+                                )}
+                              </div>
+
+                              <p className="kn2-table-callout">
+                                {isTableEditing
+                                  ? '当前高亮代表单元格或区域，属性会直接作用在当前选区；按 Esc 返回整表选择。'
+                                  : '当前蓝框代表整张表在画布中的交互边界；双击后进入单元格编辑。'}
+                              </p>
+                            </div>
+
+                            <div className="kn2-table-group">
+                              <p className="kn2-section__title">结构</p>
+                              <div className="kn2-table-action-grid">
+                                <TableActionCard
+                                  eyebrow="表头"
+                                  title={activeTableContext?.hasHeaderRow ? '取消首行表头' : '设为首行表头'}
+                                  detail="切换行级结构"
+                                  disabled={!isTableEditing}
+                                  onClick={() => activeEditor?.chain().focus().toggleHeaderRow().run()}
+                                />
+                                <TableActionCard
+                                  eyebrow="表头"
+                                  title={activeTableContext?.hasHeaderColumn ? '取消首列表头' : '设为首列表头'}
+                                  detail="切换列级结构"
+                                  disabled={!isTableEditing}
+                                  onClick={() => activeEditor?.chain().focus().toggleHeaderColumn().run()}
+                                />
                               </div>
                             </div>
 
-                            <div style={{ height: 1, background: 'var(--divider)', margin: '4px 0' }} />
-
-                            <div>
-                              <div className="kn2-hint" style={{ marginBottom: 4 }}>单元格与删除</div>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                                <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().mergeCells().run()}>合并</button>
-                                <button className="kn2-btn kn2-btn--secondary" onClick={() => activeEditor?.chain().focus().splitCell().run()}>拆分</button>
-                                <button className="kn2-btn kn2-btn--secondary" style={{ color: '#ef4444' }} onClick={() => activeEditor?.chain().focus().deleteRow().run()}>删行</button>
-                                <button className="kn2-btn kn2-btn--secondary" style={{ color: '#ef4444' }} onClick={() => activeEditor?.chain().focus().deleteColumn().run()}>删列</button>
+                            <div className="kn2-table-group">
+                              <p className="kn2-section__title">插入</p>
+                              <div className="kn2-table-action-grid">
+                                <TableActionCard
+                                  eyebrow="新增"
+                                  title="上方加行"
+                                  detail="在当前行之前"
+                                  disabled={!isTableEditing}
+                                  onClick={() => activeEditor?.chain().focus().addRowBefore().run()}
+                                />
+                                <TableActionCard
+                                  eyebrow="新增"
+                                  title="下方加行"
+                                  detail="在当前行之后"
+                                  disabled={!isTableEditing}
+                                  onClick={() => activeEditor?.chain().focus().addRowAfter().run()}
+                                />
+                                <TableActionCard
+                                  eyebrow="新增"
+                                  title="左侧加列"
+                                  detail="在当前列之前"
+                                  disabled={!isTableEditing}
+                                  onClick={() => activeEditor?.chain().focus().addColumnBefore().run()}
+                                />
+                                <TableActionCard
+                                  eyebrow="新增"
+                                  title="右侧加列"
+                                  detail="在当前列之后"
+                                  disabled={!isTableEditing}
+                                  onClick={() => activeEditor?.chain().focus().addColumnAfter().run()}
+                                />
                               </div>
+                            </div>
+
+                            {isTableEditing && activeTableCell && activeTableContext?.kind !== 'table' && (
+                              <div className="kn2-table-field-card">
+                                <div className="kn2-table-field-card__head">
+                                  <div className="kn2-table-card__copy">
+                                    <span className="kn2-section__title">单元格容器</span>
+                                    <strong className="kn2-table-card__title">背景、边框与垂直定位</strong>
+                                  </div>
+                                  <TableChip tone="muted">文字样式请到“文本”</TableChip>
+                                </div>
+                                <div className="kn2-table-field-stack">
+                                  <div className="kn2-table-control-card">
+                                    <span className="kn2-table-control-card__label">垂直定位</span>
+                                    <div style={{ marginTop: 8 }}>
+                                      <KNPillGroup
+                                        options={[
+                                          { value: 'top', icon: <AlignStartVertical size={14} />, label: '顶部' },
+                                          { value: 'middle', icon: <AlignCenterVertical size={14} />, label: '居中' },
+                                          { value: 'bottom', icon: <AlignEndVertical size={14} />, label: '底部' },
+                                        ]}
+                                        stretch
+                                        value={activeTableCellVerticalAlign}
+                                        onChange={(value) => applyTableCellAttribute(activeEditor, 'cellVerticalAlign', value)}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <ColorSwatch
+                                    value={activeTableCellBackground || 'transparent'}
+                                    onChange={(value) => applyTableCellAttribute(activeEditor, 'cellBackground', value)}
+                                    triggerVariant="field"
+                                    triggerLabel="填充颜色"
+                                    triggerDetail={formatColorControlDetail(activeTableCellBackground || 'transparent', { transparentLabel: '无填充' })}
+                                    allowGradient
+                                  />
+
+                                  <ColorSwatch
+                                    value={activeTableCellBorderColor}
+                                    onChange={(value) => applyTableCellAttribute(activeEditor, 'cellBorderColor', value)}
+                                    triggerVariant="field"
+                                    triggerLabel="边框颜色"
+                                    triggerDetail={formatColorControlDetail(activeTableCellBorderColor)}
+                                    allowGradient={false}
+                                  />
+
+                                  <div className="kn2-table-controls-grid">
+                                    <div className="kn2-table-control-card">
+                                      <span className="kn2-table-control-card__label">内边距</span>
+                                      <div style={{ marginTop: 2 }}>
+                                        <StepperInput
+                                          value={activeTableCellPadding}
+                                          min={0}
+                                          max={48}
+                                          suffix="px"
+                                          width="100%"
+                                          onChange={(value) => applyTableCellAttribute(activeEditor, 'cellPadding', value)}
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="kn2-table-control-card">
+                                      <span className="kn2-table-control-card__label">边框粗细</span>
+                                      <div style={{ marginTop: 2 }}>
+                                        <StepperInput
+                                          value={activeTableCellBorderWidth}
+                                          min={0}
+                                          max={12}
+                                          suffix="px"
+                                          width="100%"
+                                          onChange={(value) => applyTableCellAttribute(activeEditor, 'cellBorderWidth', value)}
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="kn2-table-control-card kn2-table-control-card--full">
+                                      <span className="kn2-table-control-card__label">边框样式</span>
+                                      <div style={{ marginTop: 2 }}>
+                                        <KNSelect
+                                          value={activeTableCellBorderStyle}
+                                          onChange={(value) => applyTableCellAttribute(activeEditor, 'cellBorderStyle', value)}
+                                        >
+                                          <option value="solid">实线</option>
+                                          <option value="dashed">虚线</option>
+                                          <option value="dotted">点线</option>
+                                        </KNSelect>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="kn2-table-group">
+                              <p className="kn2-section__title">选区操作</p>
+                              <div className="kn2-table-action-grid">
+                                <TableActionCard
+                                  eyebrow="单元格"
+                                  title="合并"
+                                  detail="合并当前选区"
+                                  disabled={!isTableEditing || !activeTableContext?.canMerge}
+                                  onClick={() => activeEditor?.chain().focus().mergeCells().run()}
+                                />
+                                <TableActionCard
+                                  eyebrow="单元格"
+                                  title="拆分"
+                                  detail="还原跨度结构"
+                                  disabled={!isTableEditing || !activeTableContext?.canSplit}
+                                  onClick={() => activeEditor?.chain().focus().splitCell().run()}
+                                />
+                                <TableActionCard
+                                  eyebrow="结构"
+                                  title="删除当前行"
+                                  detail="移除所在行"
+                                  tone="danger"
+                                  disabled={!isTableEditing}
+                                  onClick={() => activeEditor?.chain().focus().deleteRow().run()}
+                                />
+                                <TableActionCard
+                                  eyebrow="结构"
+                                  title="删除当前列"
+                                  detail="移除所在列"
+                                  tone="danger"
+                                  disabled={!isTableEditing}
+                                  onClick={() => activeEditor?.chain().focus().deleteColumn().run()}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="kn2-table-danger">
+                              <button
+                                type="button"
+                                className="kn2-danger-btn"
+                                onClick={deleteSelection}
+                              >
+                                <Trash2 size={13} />
+                                删除表格
+                              </button>
                             </div>
                           </div>
                         </KNPanel>

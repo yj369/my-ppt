@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2, Edit3, Presentation, Download, Upload, CheckCircle2, X, LayoutGrid } from 'lucide-react'
+import { Plus, Trash2, Edit3, Presentation, Download, CheckCircle2, LayoutGrid } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../lib/db'
 import { createDemoPresentation } from '../lib/presentation'
@@ -20,11 +20,11 @@ export function DashboardPage() {
     const demo = createDemoPresentation()
     const now = Date.now()
     const newProject: Project = {
+      ...demo,
       id,
       name: '未命名演示文稿',
       createdAt: now,
       updatedAt: now,
-      ...demo,
     }
     await db.projects.add(newProject)
     addToast('已成功创建新演示文稿', 'success')

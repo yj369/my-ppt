@@ -31,6 +31,81 @@ type TransformControlsProps = {
 
 type TransformMode = 'none' | 'drag' | 'resize' | 'rotate'
 
+function applyAspectRatioConstraint({
+  dir,
+  startW,
+  startH,
+  startL,
+  startT,
+  width,
+  height,
+  x,
+  y,
+  minSize = 48,
+}: {
+  dir: string
+  startW: number
+  startH: number
+  startL: number
+  startT: number
+  width: number
+  height: number
+  x: number
+  y: number
+  minSize?: number
+}) {
+  const ratio = startW / startH
+  if (!Number.isFinite(ratio) || ratio <= 0) {
+    return { width, height, x, y }
+  }
+
+  const resizeHorizontal = dir.includes('e') || dir.includes('w')
+  const resizeVertical = dir.includes('n') || dir.includes('s')
+
+  if (!resizeHorizontal && !resizeVertical) {
+    return { width, height, x, y }
+  }
+
+  if (resizeHorizontal && resizeVertical) {
+    const scaleX = Math.abs(width) / startW
+    const scaleY = Math.abs(height) / startH
+    const nextScale = Math.max(scaleX, scaleY, minSize / startW, minSize / startH)
+    const nextWidth = Math.max(minSize, startW * nextScale)
+    const nextHeight = Math.max(minSize, startH * nextScale)
+
+    return {
+      width: nextWidth,
+      height: nextHeight,
+      x: dir.includes('w') ? startL + startW - nextWidth : startL,
+      y: dir.includes('n') ? startT + startH - nextHeight : startT,
+    }
+  }
+
+  if (resizeHorizontal) {
+    const nextWidth = Math.max(minSize, Math.abs(width))
+    const nextHeight = Math.max(minSize, nextWidth / ratio)
+    const centerY = startT + startH / 2
+
+    return {
+      width: nextWidth,
+      height: nextHeight,
+      x: dir.includes('w') ? startL + startW - nextWidth : startL,
+      y: centerY - nextHeight / 2,
+    }
+  }
+
+  const nextHeight = Math.max(minSize, Math.abs(height))
+  const nextWidth = Math.max(minSize, nextHeight * ratio)
+  const centerX = startL + startW / 2
+
+  return {
+    width: nextWidth,
+    height: nextHeight,
+    x: centerX - nextWidth / 2,
+    y: dir.includes('n') ? startT + startH - nextHeight : startT,
+  }
+}
+
 function renderAlignmentGuides(guides: Array<{ type: 'v' | 'h'; pos: number }>, spacingGuides: Array<{ type: 'v' | 'h'; start: number; end: number; pos: number }> = []) {
   const container = document.getElementById('dynamic-guides')
   if (!container) return
@@ -192,6 +267,24 @@ export function TransformControls({
           y = state.startT + deltaY
         }
 
+        if (block.keepRatio) {
+          const constrained = applyAspectRatioConstraint({
+            dir: state.dir,
+            startW: state.startW,
+            startH: state.startH,
+            startL: state.startL,
+            startT: state.startT,
+            width,
+            height,
+            x,
+            y,
+          })
+          width = constrained.width
+          height = constrained.height
+          x = constrained.x
+          y = constrained.y
+        }
+
         // Apply snapping
         if (showGuides || showGrid) {
           const currentSlide = slides.find((s) => s.id === slideId)
@@ -221,6 +314,24 @@ export function TransformControls({
               renderAlignmentGuides(snap.guides, snap.spacingGuides)
             }
           }
+        }
+
+        if (block.keepRatio) {
+          const constrained = applyAspectRatioConstraint({
+            dir: state.dir,
+            startW: state.startW,
+            startH: state.startH,
+            startL: state.startL,
+            startT: state.startT,
+            width,
+            height,
+            x,
+            y,
+          })
+          width = constrained.width
+          height = constrained.height
+          x = constrained.x
+          y = constrained.y
         }
 
         // Lock aspect ratio for circles: use the primary drag axis as canonical size
@@ -326,7 +437,22 @@ export function TransformControls({
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [block.id, blockRef, camZoom, commitTransform, disabled, setLocalTransform, slideId, updateBlocks])
+  }, [
+    block.id,
+    block.keepRatio,
+    block.type,
+    blockRef,
+    camZoom,
+    commitTransform,
+    disabled,
+    selectedBlockIds,
+    setLocalTransform,
+    showGrid,
+    showGuides,
+    slideId,
+    slides,
+    updateBlocks,
+  ])
 
   const initTransform = useCallback(
     (

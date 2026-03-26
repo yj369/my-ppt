@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   AlignCenter,
   AlignJustify,
   AlignLeft,
@@ -36,6 +37,12 @@ import {
   getSlideBuildOrder,
   getTriggerLabel,
 } from '../../lib/animations'
+import {
+  buildLegacyImageContent,
+  getImageBlockData,
+  getImageScalePercent,
+  isImageUpscaled,
+} from '../../lib/imageBlock'
 import {
   BACKGROUND_OPTIONS,
   LAYOUT_OPTIONS,
@@ -1798,6 +1805,24 @@ export function SidebarRight() {
       }
     : null
   const arrangeRotation = activeBlock ? normalizeAngle(activeBlock.rotation) : 0
+  const activeImage = !isGroupSelection && activeBlock?.type === 'image'
+    ? getImageBlockData(activeBlock)
+    : null
+  const activeImageScale = activeBlock && !isGroupSelection
+    ? getImageScalePercent(activeBlock)
+    : null
+  const activeImageIsUpscaled = activeBlock && !isGroupSelection
+    ? isImageUpscaled(activeBlock)
+    : false
+  const activeImageNaturalSizeLabel = activeImage?.naturalWidth && activeImage?.naturalHeight
+    ? `${activeImage.naturalWidth} × ${activeImage.naturalHeight} px`
+    : '读取中'
+  const activeImageDisplaySizeLabel = activeBlock && activeImage
+    ? `${Math.round(activeBlock.width)} × ${Math.round(activeBlock.height)} px`
+    : ''
+  const activeImageScaleLabel = activeImageScale === null
+    ? '读取中'
+    : `${Math.round(activeImageScale)}%`
   const fillControl = activeBlock ? getFillControlState(activeBlock.appearance) : null
   const isInlineTextEditing = !!(
     activeBlock
@@ -2483,6 +2508,53 @@ export function SidebarRight() {
                           </div>
                         </div>
                       </KNPanel>
+
+                      {activeImage && (
+                        <KNPanel title="图片">
+                          <div className="kn2-image-meta">
+                            <div className="kn2-image-meta-row">
+                              <span className="kn2-image-meta-label">原始尺寸</span>
+                              <span className="kn2-image-meta-value">{activeImageNaturalSizeLabel}</span>
+                            </div>
+                            <div className="kn2-image-meta-row">
+                              <span className="kn2-image-meta-label">画布显示</span>
+                              <span className="kn2-image-meta-value">{activeImageDisplaySizeLabel}</span>
+                            </div>
+                            <div className="kn2-image-meta-row">
+                              <span className="kn2-image-meta-label">缩放比例</span>
+                              <span className="kn2-image-meta-value">{activeImageScaleLabel}</span>
+                            </div>
+
+                            <div className="kn2-image-fit-row">
+                              <span className="kn2-image-meta-label">适配方式</span>
+                              <KNSelect
+                                value={activeImage.objectFit}
+                                onChange={(value) => {
+                                  upd({
+                                    image: { objectFit: value as typeof activeImage.objectFit },
+                                    content: buildLegacyImageContent(activeImage.src, value as typeof activeImage.objectFit),
+                                  })
+                                }}
+                              >
+                                <option value="fill">拉伸填满</option>
+                                <option value="contain">完整显示</option>
+                                <option value="cover">裁切填充</option>
+                              </KNSelect>
+                            </div>
+
+                            <p className="kn2-image-note">
+                              蓝框表示当前画布里的交互边界，也就是这张图当前可拖拽、可缩放的容器尺寸。
+                            </p>
+
+                            {activeImageIsUpscaled && (
+                              <div className="kn2-image-warning">
+                                <AlertTriangle size={14} />
+                                <span>当前显示尺寸已超过原图像素上限，导出时可能变糊。</span>
+                              </div>
+                            )}
+                          </div>
+                        </KNPanel>
+                      )}
 
                       <KNPanel title="旋转与翻转">
                         <div className="kn2-arrange-stack">

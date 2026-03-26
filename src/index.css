@@ -1415,6 +1415,44 @@ body.play-mode .editor-block {
   padding: 0;
 }
 
+.kn-image-frame {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--block-radius, 24px);
+  border-style: var(--block-stroke-style, solid);
+  border-width: var(--block-stroke-width, 1px);
+  border-color: var(--block-stroke-color, var(--surface-border-default));
+  box-shadow: var(--block-shadow, var(--surface-shadow-default));
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.kn-image-frame img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+.kn-image-frame--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  color: var(--kn2-ink-3);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  background:
+    linear-gradient(135deg, rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.06)),
+    rgba(15, 23, 42, 0.03);
+}
+
+.kn-image-frame__status {
+  padding: 0 16px;
+  text-align: center;
+}
+
 .editor-block[data-type="image"] .ProseMirror img {
   width: 100%;
   height: 100%;
@@ -6436,6 +6474,61 @@ body.play-mode .rotate-link {
   border-left: 1px dashed rgba(0, 122, 255, 0.28);
   transform: translateX(-50%);
   pointer-events: none;
+}
+
+.kn2-image-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.kn2-image-meta-row,
+.kn2-image-fit-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.kn2-image-meta-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--kn2-ink-2);
+}
+
+.kn2-image-meta-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--kn2-ink);
+}
+
+.kn2-image-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(0, 122, 255, 0.06);
+  color: var(--kn2-ink-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.kn2-image-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 149, 0, 0.12);
+  color: #9a6700;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.kn2-image-warning svg {
+  flex: none;
+  margin-top: 1px;
 }
 
 .kn2-group-actions {

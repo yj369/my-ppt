@@ -8,8 +8,6 @@ import type { ElementType } from '../../types/editor'
 import { saveLocalImage, getImageDimensions, calculateFitDimensions } from '../../lib/imageStorage'
 import { SlideFrame } from './SlideFrame'
 
-import { AlertTriangle, X } from 'lucide-react'
-
 function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
     return false
@@ -240,7 +238,13 @@ export function CanvasViewport() {
             const objectUrl = URL.createObjectURL(file)
             getImageDimensions(objectUrl).then(({ width, height }) => {
               const fit = calculateFitDimensions(width, height)
-              useEditorStore.getState().insertBlock('image', { src: uri, width: fit.width, height: fit.height })
+              useEditorStore.getState().insertBlock('image', {
+                src: uri,
+                width: fit.width,
+                height: fit.height,
+                naturalWidth: width,
+                naturalHeight: height,
+              })
               URL.revokeObjectURL(objectUrl)
             }).catch(() => {
               useEditorStore.getState().insertBlock('image', { src: uri })
@@ -448,7 +452,15 @@ export function CanvasViewport() {
           const objectUrl = URL.createObjectURL(file)
           getImageDimensions(objectUrl).then(({ width, height }) => {
             const fit = calculateFitDimensions(width, height)
-            insertBlock('image', { x: dropX, y: dropY, src: uri, width: fit.width, height: fit.height })
+            insertBlock('image', {
+              x: dropX,
+              y: dropY,
+              src: uri,
+              width: fit.width,
+              height: fit.height,
+              naturalWidth: width,
+              naturalHeight: height,
+            })
             URL.revokeObjectURL(objectUrl)
           }).catch(() => {
             insertBlock('image', { x: dropX, y: dropY, src: uri })

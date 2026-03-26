@@ -74,6 +74,7 @@ export type AnimationPhase = 'buildIn' | 'action' | 'buildOut'
 export type TriggerType = 'onClick' | 'withPrev' | 'afterPrev'
 export type TextAlign = 'left' | 'center' | 'right' | 'justify'
 export type InspectorTab = 'document' | 'format' | 'animate'
+export type ImageObjectFit = 'fill' | 'contain' | 'cover'
 
 export type BuildInAnimation = {
   effect: AnimationType
@@ -105,6 +106,13 @@ export type BlockAnimations = {
   buildIn: BuildInAnimation
   action: ActionAnimation[]
   buildOut: BuildOutAnimation
+}
+
+export type ImageBlockData = {
+  src: string
+  naturalWidth: number | null
+  naturalHeight: number | null
+  objectFit: ImageObjectFit
 }
 
 export type BlockAppearance = {
@@ -171,6 +179,7 @@ export type EditorBlock = {
   locked: boolean
   hidden: boolean
   keepRatio?: boolean
+  image?: ImageBlockData | null
   content: string
   appearance: BlockAppearance
   anim: AnimationType

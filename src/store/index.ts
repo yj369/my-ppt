@@ -20,15 +20,16 @@ import {
   getNextZIndex,
   normalizePresentationSnapshot,
 } from '../lib/presentation'
+import { getImageBlockData } from '../lib/imageBlock'
 import type {
   AnimationPhase,
   BlockAppearance,
   EditorBlock,
   ElementType,
+  ImageBlockData,
   InspectorTab,
   PresentationSnapshot,
   PresentationTheme,
-  Project,
   Slide,
   SlideLayout,
   TriggerType,
@@ -36,8 +37,9 @@ import type {
 
 const STORAGE_KEY = 'tarot-keynote-lab-v5'
 
-type BlockUpdate = Partial<Omit<EditorBlock, 'appearance'>> & {
+type BlockUpdate = Partial<Omit<EditorBlock, 'appearance' | 'image'>> & {
   appearance?: Partial<BlockAppearance>
+  image?: Partial<ImageBlockData> | null
 }
 
 type BlockUpdateBatch = Array<{
@@ -82,7 +84,19 @@ export type EditorState = {
   ) => void
   importPresentation: (snapshot: PresentationSnapshot) => void
   resetPresentation: () => void
-  insertBlock: (type: ElementType, options?: { x?: number; y?: number; width?: number; height?: number; src?: string; content?: string }) => void
+  insertBlock: (
+    type: ElementType,
+    options?: {
+      x?: number
+      y?: number
+      width?: number
+      height?: number
+      src?: string
+      naturalWidth?: number | null
+      naturalHeight?: number | null
+      content?: string
+    },
+  ) => void
   addBlock: (slideId: string, block: EditorBlock) => void
   updateBlock: (slideId: string, blockId: string, updates: BlockUpdate) => void
   updateBlocks: (slideId: string, updates: BlockUpdateBatch) => void
@@ -150,9 +164,19 @@ function reorder<T>(items: T[], fromIndex: number, toIndex: number) {
 }
 
 function applyBlockUpdate(block: EditorBlock, updates: BlockUpdate) {
-  const next = {
+  const nextImage = updates.image === undefined
+    ? block.image
+    : updates.image === null
+    ? null
+    : (() => {
+        const baseImage = getImageBlockData(block)
+        return baseImage ? { ...baseImage, ...updates.image } : null
+      })()
+
+  const next: EditorBlock = {
     ...block,
     ...updates,
+    image: nextImage,
     appearance: updates.appearance
       ? { ...block.appearance, ...updates.appearance }
       : block.appearance,

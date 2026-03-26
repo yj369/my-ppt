@@ -108,7 +108,13 @@ export function Toolbar() {
     getImageDimensions(url)
       .then(({ width, height }) => {
         const fit = calculateFitDimensions(width, height)
-        insertBlock('image', { src: url, width: fit.width, height: fit.height })
+        insertBlock('image', {
+          src: url,
+          width: fit.width,
+          height: fit.height,
+          naturalWidth: width,
+          naturalHeight: height,
+        })
       })
       .catch(() => {
         insertBlock('image', { src: url })
@@ -126,7 +132,13 @@ export function Toolbar() {
       getImageDimensions(objectUrl)
         .then(({ width, height }) => {
           const fit = calculateFitDimensions(width, height)
-          insertBlock('image', { src: uri, width: fit.width, height: fit.height })
+          insertBlock('image', {
+            src: uri,
+            width: fit.width,
+            height: fit.height,
+            naturalWidth: width,
+            naturalHeight: height,
+          })
           URL.revokeObjectURL(objectUrl)
         })
         .catch(() => {

@@ -173,7 +173,7 @@ export function calculateSnap(
     resizeDir?: string
   }
 ): SnapResult {
-  const { gridSize, snapThreshold = 5, slideWidth, slideHeight, resizeDir } = options
+  const { snapThreshold = 5, slideWidth, slideHeight, resizeDir } = options
   const result: SnapResult = {
     ...currentRect,
     guides: [],
@@ -207,12 +207,12 @@ export function calculateSnap(
   }
 
   // 2. Alignment Snapping (Edges and Centers)
-  const currentV = []
+  const currentV: Array<{ pos: number; type: 'start' | 'center' | 'end' }> = []
   if (!isResizing || resizeDir.includes('w')) currentV.push({ pos: currentRect.x, type: 'start' })
   if (!isResizing) currentV.push({ pos: currentRect.x + currentRect.width / 2, type: 'center' })
   if (!isResizing || resizeDir.includes('e')) currentV.push({ pos: currentRect.x + currentRect.width, type: 'end' })
 
-  const currentH = []
+  const currentH: Array<{ pos: number; type: 'start' | 'center' | 'end' }> = []
   if (!isResizing || resizeDir.includes('n')) currentH.push({ pos: currentRect.y, type: 'start' })
   if (!isResizing) currentH.push({ pos: currentRect.y + currentRect.height / 2, type: 'center' })
   if (!isResizing || resizeDir.includes('s')) currentH.push({ pos: currentRect.y + currentRect.height, type: 'end' })
@@ -381,6 +381,5 @@ export function buildScaleSelectionUpdates(
     },
   }))
 }
-
 
 

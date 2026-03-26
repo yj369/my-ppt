@@ -1,6 +1,6 @@
 import gsap from 'gsap'
 import { getBlockAnimations } from './animations'
-import type { AnimationPhase, BlockAnimations, EditorBlock, BuildInAnimation, ActionAnimation, BuildOutAnimation } from '../types/editor'
+import type { AnimationPhase, EditorBlock, BuildInAnimation, ActionAnimation, BuildOutAnimation } from '../types/editor'
 
 export type RuntimeSequenceItem = {
   element: HTMLElement
@@ -42,7 +42,10 @@ function stopElementRuntime(element: HTMLElement, phase?: AnimationPhase) {
   const runningAnimation = activeRuntimeAnimations.get(element)
   if (runningAnimation) {
     // Only kill if it's a non-looping animation or if we're moving to a destructive phase like buildOut
-    const isLoop = runningAnimation.vars.repeat === -1 || (runningAnimation instanceof gsap.core.Timeline && runningAnimation.repeat() === -1)
+    const tweenRepeat = 'vars' in runningAnimation
+      ? (runningAnimation as gsap.core.Animation & { vars?: { repeat?: number } }).vars?.repeat
+      : undefined
+    const isLoop = tweenRepeat === -1 || (runningAnimation instanceof gsap.core.Timeline && runningAnimation.repeat() === -1)
     if (phase === 'buildOut' || !isLoop) {
       runningAnimation.kill()
       activeRuntimeAnimations.delete(element)

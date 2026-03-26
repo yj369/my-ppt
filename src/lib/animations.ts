@@ -90,8 +90,6 @@ type BlockAnimationPatch = Partial<{
   loop: boolean
 }>
 
-const PHASES: AnimationPhase[] = ['buildIn', 'action', 'buildOut']
-
 function hasOrder(order: number) {
   return Number.isFinite(order) && order > 0
 }

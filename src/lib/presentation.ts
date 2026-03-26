@@ -6,10 +6,12 @@ import {
   normalizeBlockAnimations,
   normalizeSlideAnimations,
 } from './animations'
+import { buildLegacyImageContent, createImageBlockData, getImageBlockData } from './imageBlock'
 import type {
   BlockAppearance,
   EditorBlock,
   ElementType,
+  ImageObjectFit,
   PresentationSnapshot,
   PresentationTheme,
   Slide,
@@ -140,6 +142,9 @@ const baseTextAppearance = (textColor = '#f8fafc'): BlockAppearance => ({
 type BlockOverrides = Partial<Omit<EditorBlock, 'appearance'>> & {
   appearance?: Partial<BlockAppearance>
   src?: string
+  naturalWidth?: number | null
+  naturalHeight?: number | null
+  objectFit?: ImageObjectFit
 }
 
 export function getThemeLabel(theme: PresentationTheme) {
@@ -421,7 +426,13 @@ function getPresetByType(type: ElementType, overrides?: BlockOverrides): EditorB
         duration: 0.7,
         delay: 0,
       }
-    case 'image':
+    case 'image': {
+      const image = createImageBlockData({
+        src: overrides?.src || heroImage,
+        naturalWidth: overrides?.naturalWidth,
+        naturalHeight: overrides?.naturalHeight,
+        objectFit: overrides?.objectFit,
+      })
       return {
         id: uuidv4(),
         name: '图片',
@@ -435,15 +446,16 @@ function getPresetByType(type: ElementType, overrides?: BlockOverrides): EditorB
         opacity: 1,
         locked: false,
         hidden: false,
-        content: `
-          <img src="${overrides?.src || heroImage}" alt="图片" style="width: 100%; height: 100%; object-fit: fill; pointer-events: none; display: block;" />
-        `,
+        keepRatio: overrides?.keepRatio ?? true,
+        image,
+        content: buildLegacyImageContent(image.src, image.objectFit),
         appearance: baseAppearance('transparent'),
         anim: 'scale-in',
         trigger: 'withPrev',
         duration: 0.8,
         delay: 0.1,
       }
+    }
     case 'video':
       return {
         id: uuidv4(),
@@ -1174,7 +1186,7 @@ export function createDemoPresentation(): PresentationSnapshot {
   ]
 
   return {
-    presentationName: '未命名 1',
+    name: '未命名 1',
     theme,
     slides: slides.map((slide) => normalizeSlideAnimations(slide)),
     currentSlideId: slides[0]?.id ?? null,
@@ -1184,6 +1196,7 @@ export function createDemoPresentation(): PresentationSnapshot {
 }
 
 function normalizeBlockAppearance(block: EditorBlock): EditorBlock {
+  const normalizedImage = getImageBlockData(block)
   const boxModel = {
     marginTop: block.appearance.marginTop ?? 0,
     marginRight: block.appearance.marginRight ?? 0,
@@ -1198,6 +1211,11 @@ function normalizeBlockAppearance(block: EditorBlock): EditorBlock {
   if (!['heading', 'subheading', 'body'].includes(block.type)) {
     return {
       ...block,
+      keepRatio: block.type === 'image' ? (block.keepRatio ?? true) : block.keepRatio,
+      image: normalizedImage,
+      content: block.type === 'image' && normalizedImage
+        ? buildLegacyImageContent(normalizedImage.src, normalizedImage.objectFit)
+        : block.content,
       appearance: {
         ...block.appearance,
         ...boxModel,
@@ -1251,6 +1269,11 @@ function normalizeBlockAppearance(block: EditorBlock): EditorBlock {
 
   return {
     ...block,
+    keepRatio: block.type === 'image' ? (block.keepRatio ?? true) : block.keepRatio,
+    image: normalizedImage,
+    content: block.type === 'image' && normalizedImage
+      ? buildLegacyImageContent(normalizedImage.src, normalizedImage.objectFit)
+      : block.content,
     appearance: normalized,
   }
 }

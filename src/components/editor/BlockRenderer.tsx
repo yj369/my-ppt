@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { parseCssColor } from '../../lib/colors'
 import type { EditorBlock } from '../../types/editor'
 import { TipTapEditor } from './TipTapEditor'
+import { EditableImage } from './EditableImage'
 import * as LucideIcons from 'lucide-react'
 
 type BlockRendererProps = {
@@ -242,6 +243,9 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
     )
   }
 
+  if (block.type === 'image') {
+    return <EditableImage block={block} slideId={slideId} style={style} />
+  }
 
   return (
     <div

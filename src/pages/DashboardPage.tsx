@@ -7,6 +7,7 @@ import { db } from '../lib/db'
 import { createDemoPresentation } from '../lib/presentation'
 import { useEditorStore } from '../store'
 import type { Project } from '../types/editor'
+import { GitHubVersionChecker } from '../components/layout/GitHubVersionChecker'
 
 export function DashboardPage() {
   const projects = useLiveQuery(() => db.projects.orderBy('updatedAt').reverse().toArray())
@@ -92,13 +93,14 @@ export function DashboardPage() {
     <div className="min-h-screen bg-[#f8f8fa] text-neutral-900 p-8 pb-32 selection:bg-neutral-200">
       <div className="max-w-6xl mx-auto">
         <header className="flex justify-between items-end mb-16 animate-mask">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center shadow-lg shadow-neutral-200">
                 <LayoutGrid size={22} className="text-white" />
               </div>
               <h1 className="text-3xl font-black tracking-tight text-black">项目库</h1>
             </div>
+            <GitHubVersionChecker />
           </div>
           
           <div className="flex gap-3">

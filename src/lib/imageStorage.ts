@@ -54,6 +54,70 @@ export function isLocalImage(uri: string): boolean {
   return uri.startsWith(IDB_PREFIX)
 }
 
+export async function getLocalImageBlob(uri: string): Promise<Blob | null> {
+  if (!isLocalImage(uri)) {
+    return null
+  }
+
+  const id = uri.slice(IDB_PREFIX.length)
+  return (await get<Blob>(id)) ?? null
+}
+
+export async function restoreLocalImage(uri: string, blob: Blob): Promise<void> {
+  if (!isLocalImage(uri)) {
+    throw new Error(`Unsupported local image uri: ${uri}`)
+  }
+
+  const id = uri.slice(IDB_PREFIX.length)
+  await set(id, blob)
+
+  const previousObjectUrl = objectUrlCache.get(uri)
+  if (previousObjectUrl) {
+    URL.revokeObjectURL(previousObjectUrl)
+  }
+
+  objectUrlCache.set(uri, URL.createObjectURL(blob))
+}
+
+export async function blobToDataUrl(blob: Blob): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+        return
+      }
+
+      reject(new Error('Failed to serialize blob as data URL'))
+    }
+
+    reader.onerror = () => {
+      reject(reader.error ?? new Error('Failed to read blob'))
+    }
+
+    reader.readAsDataURL(blob)
+  })
+}
+
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const match = dataUrl.match(/^data:([^;,]+)?(?:;base64)?,(.*)$/)
+  if (!match) {
+    throw new Error('Invalid data URL')
+  }
+
+  const mimeType = match[1] ?? 'application/octet-stream'
+  const payload = match[2] ?? ''
+  const binary = atob(payload)
+  const bytes = new Uint8Array(binary.length)
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+
+  return new Blob([bytes], { type: mimeType })
+}
+
 /**
  * Resolves an image URL naturally to return its intrinsic dimensions.
  */

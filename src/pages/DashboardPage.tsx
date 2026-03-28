@@ -1,18 +1,23 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2, Edit3, Presentation, Download, CheckCircle2, LayoutGrid } from 'lucide-react'
+import { Plus, Trash2, Edit3, Presentation, Download, CheckCircle2, LayoutGrid, Upload } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../lib/db'
 import { createDemoPresentation } from '../lib/presentation'
 import { useEditorStore } from '../store'
 import type { Project } from '../types/editor'
 import { GitHubVersionChecker } from '../components/layout/GitHubVersionChecker'
+import {
+  buildProjectTransferPayload,
+  parseImportedProjectFile,
+} from '../lib/projectTransfer'
 
 export function DashboardPage() {
   const projects = useLiveQuery(() => db.projects.orderBy('updatedAt').reverse().toArray())
   const navigate = useNavigate()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const importInputRef = useRef<HTMLInputElement>(null)
   const confirm = useEditorStore((state) => state.confirm)
   const addToast = useEditorStore((state) => state.addToast)
 
@@ -64,6 +69,10 @@ export function DashboardPage() {
 
   const toggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    toggleSelectionState(id)
+  }
+
+  const toggleSelectionState = (id: string) => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     )
@@ -80,13 +89,81 @@ export function DashboardPage() {
 
   const handleExport = async (project: Project, e: React.MouseEvent) => {
     e.stopPropagation()
-    const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' })
+    const { payload, localAssetCount, missingLocalAssetCount } = await buildProjectTransferPayload(project)
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = `${project.name}.tarot`
     a.click()
     URL.revokeObjectURL(url)
+
+    if (missingLocalAssetCount > 0) {
+      addToast(`导出完成，但有 ${missingLocalAssetCount} 个本地图片资源缺失`, 'warning')
+      return
+    }
+
+    if (localAssetCount > 0) {
+      addToast(`导出完成，已打包 ${localAssetCount} 个本地图片资源`, 'success')
+      return
+    }
+
+    addToast('导出完成', 'success')
+  }
+
+  const getImportedProjectName = (baseName: string) => {
+    const existingProjects = projects ?? []
+
+    if (!existingProjects.some((project) => project.name === baseName)) {
+      return baseName
+    }
+
+    let suffix = 1
+    let candidate = `${baseName}（导入）`
+    while (existingProjects.some((project) => project.name === candidate)) {
+      suffix += 1
+      candidate = `${baseName}（导入 ${suffix}）`
+    }
+    return candidate
+  }
+
+  const handleImportClick = () => {
+    importInputRef.current?.click()
+  }
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    try {
+      const result = await parseImportedProjectFile(file)
+      const importedProject: Project = {
+        ...result.project,
+        name: getImportedProjectName(result.project.name || '导入的演示文稿'),
+      }
+
+      await db.projects.add(importedProject)
+
+      if (result.missingLocalAssetCount > 0) {
+        addToast(
+          result.source === 'legacy'
+            ? `导入完成，但旧格式文件中有 ${result.missingLocalAssetCount} 个本地图片无法恢复`
+            : `导入完成，但有 ${result.missingLocalAssetCount} 个本地图片未恢复`,
+          'warning',
+        )
+      } else if (result.restoredLocalAssetCount > 0) {
+        addToast(`导入完成，已恢复 ${result.restoredLocalAssetCount} 个本地图片资源`, 'success')
+      } else {
+        addToast('导入完成', 'success')
+      }
+    } catch (error) {
+      console.error('Import project failed:', error)
+      addToast('导入失败，文件格式无效或内容已损坏', 'error')
+    } finally {
+      event.target.value = ''
+    }
   }
 
   return (
@@ -104,6 +181,20 @@ export function DashboardPage() {
           </div>
           
           <div className="flex gap-3">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".tarot,application/json"
+              className="hidden"
+              onChange={handleImportFile}
+            />
+            <button
+              onClick={handleImportClick}
+              className="flex items-center gap-2 px-6 py-2.5 bg-white text-black rounded-2xl hover:bg-neutral-100 transition-all active:scale-95 shadow-xl shadow-neutral-200 border border-neutral-200"
+            >
+              <Upload size={20} />
+              <span className="text-sm font-bold">导入项目</span>
+            </button>
             <button
               onClick={handleCreateNew}
               className="flex items-center gap-2 px-6 py-2.5 bg-black text-white rounded-2xl hover:bg-neutral-800 transition-all active:scale-95 shadow-xl shadow-neutral-300"
@@ -120,7 +211,7 @@ export function DashboardPage() {
             return (
               <div
                 key={project.id}
-                onClick={() => selectedIds.length > 0 ? toggleSelect(project.id, {} as any) : navigate(`/editor/${project.id}`)}
+                onClick={() => selectedIds.length > 0 ? toggleSelectionState(project.id) : navigate(`/editor/${project.id}`)}
                 className={`group relative bg-black rounded-xl transition-all cursor-pointer overflow-hidden border border-neutral-800 shadow-sm stagger-item ${
                   isSelected ? 'ring-2 ring-white ring-offset-4 ring-offset-[#f8f8fa] scale-[1.02]' : 'hover:border-neutral-600 hover:shadow-xl hover:-translate-y-1'
                 }`}
@@ -222,13 +313,22 @@ export function DashboardPage() {
             </div>
             <h3 className="text-3xl font-black text-black mb-4 tracking-tight">暂无演示项目</h3>
             <p className="text-neutral-400 mb-12 text-xl font-medium tracking-widest">开启您的创作之旅</p>
-            <button
-              onClick={handleCreateNew}
-              className="inline-flex items-center gap-3 px-12 py-5 bg-black text-white rounded-[2rem] hover:bg-neutral-800 transition-all font-black text-lg shadow-2xl shadow-neutral-400"
-            >
-              <Plus size={28} />
-              <span>新建演示项目</span>
-            </button>
+            <div className="flex items-center justify-center gap-4">
+              <button
+                onClick={handleImportClick}
+                className="inline-flex items-center gap-3 px-8 py-5 bg-white text-black rounded-[2rem] hover:bg-neutral-100 transition-all font-black text-lg shadow-2xl shadow-neutral-200 border border-neutral-200"
+              >
+                <Upload size={24} />
+                <span>导入项目</span>
+              </button>
+              <button
+                onClick={handleCreateNew}
+                className="inline-flex items-center gap-3 px-12 py-5 bg-black text-white rounded-[2rem] hover:bg-neutral-800 transition-all font-black text-lg shadow-2xl shadow-neutral-400"
+              >
+                <Plus size={28} />
+                <span>新建演示项目</span>
+              </button>
+            </div>
           </div>
         )}
       </div>

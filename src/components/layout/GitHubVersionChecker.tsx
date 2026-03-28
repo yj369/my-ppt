@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
-import { GitBranch, ExternalLink, RefreshCw } from 'lucide-react'
+import { ExternalLink, RefreshCw } from 'lucide-react'
 
 const REPO_OWNER = 'yj369'
 const REPO_NAME = 'my-ppt'
-const TAGS_API = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/tags`
 const COMMITS_API = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits?per_page=1`
 
 declare const __APP_VERSION__: string

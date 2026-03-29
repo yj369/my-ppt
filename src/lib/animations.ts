@@ -1,8 +1,10 @@
 import type {
   ActionAnimation,
+  AnimationType,
   AnimationPhase,
   BlockAnimations,
   BuildInAnimation,
+  BuildOutAnimationType,
   BuildOutAnimation,
   EditorBlock,
   Slide,
@@ -17,30 +19,66 @@ export const ANIMATION_PHASE_OPTIONS: Array<{ id: AnimationPhase; label: string;
 
 export const BUILD_IN_OPTIONS = [
   { id: 'none', label: '无效果' },
-  { id: 'fade-up', label: '向上浮入' },
-  { id: 'fade-left', label: '向左滑入' },
-  { id: 'scale-in', label: '弹入' },
-  { id: 'rotate-in', label: '旋入' },
-  { id: 'blur-in', label: '清晰显现' },
-  { id: 'pop', label: '轻弹放大' },
+  { id: 'appear', label: '出现' },
+  { id: 'blur', label: '模糊' },
+  { id: 'compress', label: '压缩' },
+  { id: 'dissolve', label: '溶解' },
+  { id: 'drift', label: '漂移' },
+  { id: 'drift-scale', label: '漂移与缩放' },
+  { id: 'drop', label: '掉落' },
+  { id: 'fade-move', label: '淡入并移动' },
+  { id: 'fade-scale', label: '淡入并缩放' },
+  { id: 'fly-in', label: '飞入' },
+  { id: 'iris', label: '光圈' },
+  { id: 'keyboard', label: '键盘' },
+  { id: 'move-in', label: '移入' },
+  { id: 'wipe', label: '擦入' },
+] as const satisfies ReadonlyArray<{ id: AnimationType; label: string }>
+
+const ACTION_BASIC_OPTIONS = [
+  { id: 'move', label: '移动' },
+  { id: 'opacity', label: '不透明度' },
+  { id: 'rotate', label: '旋转' },
+  { id: 'scale', label: '缩放' },
+] as const satisfies ReadonlyArray<{ id: ActionAnimation['effect']; label: string }>
+
+const ACTION_EMPHASIS_OPTIONS = [
+  { id: 'blink', label: '闪烁' },
+  { id: 'bounce', label: '弹跳' },
+  { id: 'flip', label: '翻转' },
+  { id: 'jiggle', label: '晃动' },
+  { id: 'pop', label: '弹出' },
+  { id: 'pulse', label: '脉冲' },
+] as const satisfies ReadonlyArray<{ id: ActionAnimation['effect']; label: string }>
+
+export const ACTION_OPTION_GROUPS = [
+  { id: 'basic', label: '基础', options: ACTION_BASIC_OPTIONS },
+  { id: 'emphasis', label: '强调', options: ACTION_EMPHASIS_OPTIONS },
 ] as const
 
 export const ACTION_OPTIONS = [
   { id: 'none', label: '无效果' },
-  { id: 'pulse', label: '脉冲' },
-  { id: 'bounce', label: '弹跳' },
-  { id: 'shake', label: '抖动' },
-  { id: 'flip', label: '翻转' },
-  { id: 'flash', label: '闪烁' },
+  ...ACTION_BASIC_OPTIONS,
+  ...ACTION_EMPHASIS_OPTIONS,
 ] as const
 
 export const BUILD_OUT_OPTIONS = [
   { id: 'none', label: '无效果' },
-  { id: 'fade-out', label: '淡出' },
-  { id: 'scale-out', label: '缩退' },
-  { id: 'wipe-left', label: '向左移出' },
-  { id: 'blur-out', label: '虚化消失' },
-] as const
+  { id: 'appear', label: '消失' },
+  { id: 'blur', label: '模糊' },
+  { id: 'compress', label: '压缩' },
+  { id: 'dissolve', label: '溶解' },
+  { id: 'drift', label: '漂移' },
+  { id: 'drift-scale', label: '漂移与缩放' },
+  { id: 'drop', label: '掉落' },
+  { id: 'fade-move', label: '淡出并移动' },
+  { id: 'fade-scale', label: '淡出并缩放' },
+  { id: 'fly-in', label: '飞出' },
+  { id: 'iris', label: '光圈' },
+  { id: 'keyboard', label: '键盘' },
+  { id: 'move-in', label: '移出' },
+  { id: 'wipe', label: '擦除' },
+] as const satisfies ReadonlyArray<{ id: BuildOutAnimationType; label: string }>
 
 export const TRIGGER_OPTIONS: Array<{ id: TriggerType; label: string }> = [
   { id: 'onClick', label: '单击时' },
@@ -54,6 +92,7 @@ const DEFAULT_BUILD_IN: BuildInAnimation = {
   duration: 0.8,
   delay: 0,
   order: 0,
+  config: {},
 }
 
 export const DEFAULT_ACTION: Omit<ActionAnimation, 'id'> = {
@@ -63,6 +102,7 @@ export const DEFAULT_ACTION: Omit<ActionAnimation, 'id'> = {
   delay: 0,
   order: 0,
   loop: false,
+  config: {},
 }
 
 const DEFAULT_BUILD_OUT: BuildOutAnimation = {
@@ -71,6 +111,7 @@ const DEFAULT_BUILD_OUT: BuildOutAnimation = {
   duration: 0.7,
   delay: 0,
   order: 0,
+  config: {},
 }
 
 export type BuildOrderItem = {
@@ -88,7 +129,18 @@ type BlockAnimationPatch = Partial<{
   delay: number
   order: number
   loop: boolean
+  config: any
 }>
+
+const VALID_TRIGGERS = new Set<TriggerType>(TRIGGER_OPTIONS.map((option) => option.id))
+const VALID_BUILD_IN_EFFECTS = new Set<string>(BUILD_IN_OPTIONS.map((option) => option.id))
+const VALID_BUILD_OUT_EFFECTS = new Set<string>(BUILD_OUT_OPTIONS.map((option) => option.id))
+const VALID_ACTION_EFFECTS = new Set<string>(ACTION_OPTIONS.map((option) => option.id))
+
+export type AnimationPoint = {
+  x: number
+  y: number
+}
 
 function hasOrder(order: number) {
   return Number.isFinite(order) && order > 0
@@ -96,6 +148,163 @@ function hasOrder(order: number) {
 
 function isActiveEffect(effect: string) {
   return effect !== 'none'
+}
+
+function sanitizeTrigger(trigger: string | undefined, fallback: TriggerType) {
+  return VALID_TRIGGERS.has(trigger as TriggerType) ? (trigger as TriggerType) : fallback
+}
+
+function sanitizeTime(value: number | undefined, fallback: number) {
+  return Number.isFinite(value) ? Math.max(0, value as number) : fallback
+}
+
+function sanitizeOrder(order: number | undefined, effect: string) {
+  if (!isActiveEffect(effect)) {
+    return 0
+  }
+  return Number.isFinite(order) ? Math.max(0, order as number) : 0
+}
+
+function sanitizeEffect<T extends string>(effect: string | undefined, validEffects: Set<string>, fallback: T) {
+  return validEffects.has(effect ?? '') ? (effect as T) : fallback
+}
+
+function getFiniteNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+export function getDirectionOffset(direction: string = 'right', distance: number = 100): AnimationPoint {
+  switch (direction) {
+    case 'left': return { x: -distance, y: 0 }
+    case 'right': return { x: distance, y: 0 }
+    case 'top': return { x: 0, y: -distance }
+    case 'bottom': return { x: 0, y: distance }
+    case 'top-left': return { x: -distance, y: -distance }
+    case 'top-right': return { x: distance, y: -distance }
+    case 'bottom-left': return { x: -distance, y: distance }
+    case 'bottom-right': return { x: distance, y: distance }
+    default: return { x: distance, y: 0 }
+  }
+}
+
+export function resolveMoveTarget(
+  config: ActionAnimation['config'] | undefined,
+  start: AnimationPoint = { x: 0, y: 0 },
+  fallbackDistance: number = 50,
+): AnimationPoint {
+  const toX = getFiniteNumber(config?.toX)
+  const toY = getFiniteNumber(config?.toY)
+
+  if (toX !== undefined || toY !== undefined) {
+    return {
+      x: toX ?? start.x,
+      y: toY ?? start.y,
+    }
+  }
+
+  const distance = getFiniteNumber(config?.distance) ?? fallbackDistance
+  const offset = getDirectionOffset(config?.direction || 'right', distance)
+
+  return {
+    x: start.x + offset.x,
+    y: start.y + offset.y,
+  }
+}
+
+function getMoveStartPoint(actions: ActionAnimation[], stopBeforeIndex: number) {
+  let current: AnimationPoint = { x: 0, y: 0 }
+
+  for (let index = 0; index < stopBeforeIndex; index += 1) {
+    const action = actions[index]
+    if (action.effect !== 'move') {
+      continue
+    }
+    current = resolveMoveTarget(action.config, current)
+  }
+
+  return current
+}
+
+function buildDefaultMoveConfig(actions: ActionAnimation[], stopBeforeIndex: number) {
+  const start = getMoveStartPoint(actions, stopBeforeIndex)
+  return {
+    toX: start.x + 50,
+    toY: start.y,
+  }
+}
+
+export function getMoveActionPath(actions: ActionAnimation[], actionId: string) {
+  let current: AnimationPoint = { x: 0, y: 0 }
+
+  for (const action of actions) {
+    if (action.effect !== 'move') {
+      continue
+    }
+
+    const start = current
+    const end = resolveMoveTarget(action.config, start)
+
+    if (action.id === actionId) {
+      return {
+        start,
+        end,
+      }
+    }
+
+    current = end
+  }
+
+  return null
+}
+
+function sanitizeBuildInAnimation(animation: Partial<BuildInAnimation> = {}): BuildInAnimation {
+  const effect = sanitizeEffect(animation.effect, VALID_BUILD_IN_EFFECTS, DEFAULT_BUILD_IN.effect)
+  if (!isActiveEffect(effect)) {
+    return { ...DEFAULT_BUILD_IN }
+  }
+
+  return {
+    effect,
+    trigger: sanitizeTrigger(animation.trigger, DEFAULT_BUILD_IN.trigger),
+    duration: sanitizeTime(animation.duration, DEFAULT_BUILD_IN.duration),
+    delay: sanitizeTime(animation.delay, DEFAULT_BUILD_IN.delay),
+    order: sanitizeOrder(animation.order, effect),
+    config: animation.config ?? {},
+  }
+}
+
+function sanitizeBuildOutAnimation(animation: Partial<BuildOutAnimation> = {}): BuildOutAnimation {
+  const effect = sanitizeEffect(animation.effect, VALID_BUILD_OUT_EFFECTS, DEFAULT_BUILD_OUT.effect)
+  if (!isActiveEffect(effect)) {
+    return { ...DEFAULT_BUILD_OUT }
+  }
+
+  return {
+    effect,
+    trigger: sanitizeTrigger(animation.trigger, DEFAULT_BUILD_OUT.trigger),
+    duration: sanitizeTime(animation.duration, DEFAULT_BUILD_OUT.duration),
+    delay: sanitizeTime(animation.delay, DEFAULT_BUILD_OUT.delay),
+    order: sanitizeOrder(animation.order, effect),
+    config: animation.config ?? {},
+  }
+}
+
+function sanitizeActionAnimation(animation: Partial<ActionAnimation>): ActionAnimation | null {
+  const effect = sanitizeEffect(animation.effect, VALID_ACTION_EFFECTS, DEFAULT_ACTION.effect)
+  if (!isActiveEffect(effect)) {
+    return null
+  }
+
+  return {
+    id: animation.id ?? Math.random().toString(36).substring(2, 11),
+    effect,
+    trigger: sanitizeTrigger(animation.trigger, DEFAULT_ACTION.trigger),
+    duration: sanitizeTime(animation.duration, DEFAULT_ACTION.duration),
+    delay: sanitizeTime(animation.delay, DEFAULT_ACTION.delay),
+    order: sanitizeOrder(animation.order, effect),
+    loop: animation.loop === true,
+    config: animation.config ?? {},
+  }
 }
 
 export function createDefaultBlockAnimations(
@@ -109,7 +318,7 @@ export function createDefaultBlockAnimations(
 }
 
 export function getBlockAnimations(block: Pick<EditorBlock, 'animations' | 'anim' | 'trigger' | 'duration' | 'delay'>) {
-  const buildInLegacy: BuildInAnimation = {
+  const buildInLegacy: Partial<BuildInAnimation> = {
     effect: block.anim ?? 'none',
     trigger: block.trigger ?? 'onClick',
     duration: block.duration ?? 0.8,
@@ -121,29 +330,32 @@ export function getBlockAnimations(block: Pick<EditorBlock, 'animations' | 'anim
   if (block.animations?.action) {
     if (Array.isArray(block.animations.action)) {
       actionArray = block.animations.action
+        .map((action) => sanitizeActionAnimation(action))
+        .filter((action): action is ActionAnimation => action !== null)
     } else {
       const legacyAction: any = block.animations.action
-      if (legacyAction.effect && legacyAction.effect !== 'none') {
-        actionArray = [{
+      if (legacyAction.effect) {
+        const sanitizedLegacyAction = sanitizeActionAnimation({
           ...DEFAULT_ACTION,
           id: legacyAction.id || Math.random().toString(36).substring(2, 11),
           ...legacyAction,
-        }]
+        })
+        if (sanitizedLegacyAction) {
+          actionArray = [sanitizedLegacyAction]
+        }
       }
     }
   }
 
   return {
-    buildIn: {
-      ...DEFAULT_BUILD_IN,
+    buildIn: sanitizeBuildInAnimation({
       ...buildInLegacy,
       ...block.animations?.buildIn,
-    },
+    }),
     action: actionArray,
-    buildOut: {
-      ...DEFAULT_BUILD_OUT,
+    buildOut: sanitizeBuildOutAnimation({
       ...block.animations?.buildOut,
-    },
+    }),
   } satisfies BlockAnimations
 }
 
@@ -152,6 +364,93 @@ export function hasAnyBlockAnimation(block: EditorBlock) {
   return isActiveEffect(animations.buildIn.effect) ||
          animations.action.some(a => isActiveEffect(a.effect)) ||
          isActiveEffect(animations.buildOut.effect)
+}
+
+export const EASE_OPTIONS = [
+  { id: 'power1.out', label: '轻微淡出' },
+  { id: 'power2.out', label: '标准淡出' },
+  { id: 'power3.out', label: '强调淡出' },
+  { id: 'power4.out', label: '强烈淡出' },
+  { id: 'expo.out', label: '极速淡出' },
+  { id: 'back.out(1.7)', label: '回弹淡出' },
+  { id: 'bounce.out', label: '弹跳淡出' },
+  { id: 'power2.inOut', label: '平滑进出' },
+  { id: 'none', label: '匀速' },
+] as const
+
+export const DIRECTION_OPTIONS = [
+  { id: 'left', label: '从左侧' },
+  { id: 'right', label: '从右侧' },
+  { id: 'top', label: '从顶部' },
+  { id: 'bottom', label: '从底部' },
+  { id: 'top-left', label: '从左上' },
+  { id: 'top-right', label: '从右上' },
+  { id: 'bottom-left', label: '从左下' },
+  { id: 'bottom-right', label: '从右下' },
+  { id: 'center', label: '从中心' },
+  { id: 'clockwise', label: '顺时针' },
+  { id: 'counter-clockwise', label: '逆时针' },
+] as const
+
+export function getEffectConfigFields(phase: AnimationPhase, effect: string): string[] {
+  if (effect === 'none') return []
+
+  const common = ['ease']
+
+  if (phase === 'buildIn' || phase === 'buildOut') {
+    switch (effect) {
+      case 'appear':
+      case 'dissolve':
+        return [...common]
+      case 'blur':
+        return [...common, 'blur']
+      case 'compress':
+        return [...common, 'scale']
+      case 'drift':
+      case 'drift-scale':
+        return [...common, 'direction', 'distance']
+      case 'drop':
+        return [...common, 'distance']
+      case 'fade-move':
+      case 'move-in':
+      case 'fly-in':
+        return [...common, 'direction', 'distance']
+      case 'fade-scale':
+        return [...common, 'scale']
+      case 'wipe':
+      case 'iris':
+        return [...common, 'direction']
+      default:
+        return common
+    }
+  }
+
+  if (phase === 'action') {
+    switch (effect) {
+      case 'move':
+        return [...common, 'direction', 'distance']
+      case 'opacity':
+        return [...common, 'opacity']
+      case 'rotate':
+        return [...common, 'rotate', 'direction']
+      case 'scale':
+      case 'pulse':
+      case 'pop':
+        return [...common, 'scale']
+      case 'blink':
+        return [...common, 'opacity']
+      case 'bounce':
+        return [...common, 'bounceStrength']
+      case 'jiggle':
+        return [...common, 'shakeStrength']
+      case 'flip':
+        return [...common, 'direction']
+      default:
+        return common
+    }
+  }
+
+  return common
 }
 
 export function getEffectOptions(phase: AnimationPhase) {
@@ -246,19 +545,30 @@ export function updateSlideBlockAnimation(
         if (!actionId) return normalizeBlockAnimations(block)
         const currentActionIndex = animations.action.findIndex(a => a.id === actionId)
         if (currentActionIndex < 0) return normalizeBlockAnimations(block)
-        
+
         const current = animations.action[currentActionIndex]
-        const next = { ...current, ...updates }
+        const nextConfig = updates.config === undefined
+          ? (current.config ?? {})
+          : { ...(current.config ?? {}), ...updates.config }
+        const next = { ...current, ...updates, config: nextConfig }
+
+        if (updates.effect === 'move' && next.config?.toX === undefined && next.config?.toY === undefined) {
+          next.config = {
+            ...next.config,
+            ...buildDefaultMoveConfig(animations.action, currentActionIndex),
+          }
+        }
+
         if (!isActiveEffect(next.effect)) {
           next.order = 0
           next.delay = 0
         } else if (!hasOrder(next.order)) {
           next.order = nextOrder
         }
-        
+
         const nextActions = [...animations.action]
         nextActions[currentActionIndex] = next as ActionAnimation
-        
+
         return syncLegacyBuildIn(block, {
           ...animations,
           action: nextActions
@@ -266,9 +576,13 @@ export function updateSlideBlockAnimation(
       }
 
       const current = animations[phase]
+      const nextConfig = updates.config === undefined
+        ? (current.config ?? {})
+        : { ...(current.config ?? {}), ...updates.config }
       const next = {
         ...current,
         ...updates,
+        config: nextConfig,
       } as any
 
       if (!isActiveEffect(next.effect)) {
@@ -293,9 +607,18 @@ export function addSlideBlockAction(slide: Slide, blockId: string, action: Actio
     blocks: slide.blocks.map((block) => {
       if (block.id !== blockId) return normalizeBlockAnimations(block)
       const animations = getBlockAnimations(block)
+      const nextAction = action.effect === 'move' && action.config?.toX === undefined && action.config?.toY === undefined
+        ? {
+            ...action,
+            config: {
+              ...(action.config ?? {}),
+              ...buildDefaultMoveConfig(animations.action, animations.action.length),
+            },
+          }
+        : action
       return syncLegacyBuildIn(block, {
         ...animations,
-        action: [...animations.action, { ...action, order: nextOrder }]
+        action: [...animations.action, { ...nextAction, order: nextOrder }]
       })
     })
   })

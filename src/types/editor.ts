@@ -48,27 +48,35 @@ export type ElementType =
 
 export type AnimationType =
   | 'none'
-  | 'fade-up'
-  | 'fade-left'
-  | 'scale-in'
-  | 'rotate-in'
-  | 'blur-in'
-  | 'pop'
+  | 'appear'
+  | 'blur'
+  | 'compress'
+  | 'dissolve'
+  | 'drift'
+  | 'drift-scale'
+  | 'drop'
+  | 'fade-move'
+  | 'fade-scale'
+  | 'fly-in'
+  | 'iris'
+  | 'keyboard'
+  | 'move-in'
+  | 'wipe'
 
 export type ActionAnimationType =
   | 'none'
-  | 'pulse'
+  | 'move'
+  | 'opacity'
+  | 'rotate'
+  | 'scale'
+  | 'blink'
   | 'bounce'
-  | 'shake'
   | 'flip'
-  | 'flash'
+  | 'jiggle'
+  | 'pop'
+  | 'pulse'
 
-export type BuildOutAnimationType =
-  | 'none'
-  | 'fade-out'
-  | 'scale-out'
-  | 'wipe-left'
-  | 'blur-out'
+export type BuildOutAnimationType = AnimationType
 
 export type AnimationPhase = 'buildIn' | 'action' | 'buildOut'
 export type TriggerType = 'onClick' | 'withPrev' | 'afterPrev'
@@ -76,12 +84,42 @@ export type TextAlign = 'left' | 'center' | 'right' | 'justify'
 export type InspectorTab = 'document' | 'format' | 'animate'
 export type ImageObjectFit = 'fill' | 'contain' | 'cover'
 
+export type AnimationDirection =
+  | 'top'
+  | 'right'
+  | 'bottom'
+  | 'left'
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right'
+  | 'center'
+  | 'clockwise'
+  | 'counter-clockwise'
+
+export type AnimationConfig = {
+  direction?: AnimationDirection
+  distance?: number
+  toX?: number
+  toY?: number
+  scale?: number
+  rotate?: number
+  opacity?: number
+  blur?: number
+  ease?: string
+  repeat?: number
+  yoyo?: boolean
+  shakeStrength?: number
+  bounceStrength?: number
+}
+
 export type BuildInAnimation = {
   effect: AnimationType
   trigger: TriggerType
   duration: number
   delay: number
   order: number
+  config?: AnimationConfig
 }
 
 export type ActionAnimation = {
@@ -92,6 +130,7 @@ export type ActionAnimation = {
   delay: number
   order: number
   loop: boolean
+  config?: AnimationConfig
 }
 
 export type BuildOutAnimation = {
@@ -100,6 +139,7 @@ export type BuildOutAnimation = {
   duration: number
   delay: number
   order: number
+  config?: AnimationConfig
 }
 
 export type BlockAnimations = {

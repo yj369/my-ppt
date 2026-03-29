@@ -28,14 +28,18 @@ import { createPortal } from 'react-dom'
 import { previewBlockPhase, restoreBlockAfterPreview } from '../../lib/animation-runtime'
 import {
   ANIMATION_PHASE_OPTIONS,
+  ACTION_OPTION_GROUPS,
   TRIGGER_OPTIONS,
   DEFAULT_ACTION,
   getBlockAnimations,
   getEffectLabel,
   getEffectOptions,
+  getEffectConfigFields,
   getPhaseLabel,
   getSlideBuildOrder,
   getTriggerLabel,
+  DIRECTION_OPTIONS,
+  EASE_OPTIONS,
 } from '../../lib/animations'
 import {
   buildLegacyImageContent,
@@ -452,8 +456,8 @@ function KNPanel({
   children: React.ReactNode
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
-  
-  // If panel is disabled via toggle, we might auto-collapse, 
+
+  // If panel is disabled via toggle, we might auto-collapse,
   // but let's just let it be independently togglable
   const handleHeaderClick = (e: React.MouseEvent) => {
     // don't collapse if clicking the toggle switch
@@ -464,9 +468,9 @@ function KNPanel({
   return (
     <div className="kn2-panel">
       <div className="kn2-panel__header" onClick={handleHeaderClick}>
-        <ChevronRight 
-          size={14} 
-          className={`kn2-panel__chevron ${isOpen ? 'kn2-panel__chevron--open' : ''}`} 
+        <ChevronRight
+          size={14}
+          className={`kn2-panel__chevron ${isOpen ? 'kn2-panel__chevron--open' : ''}`}
         />
         <span className="kn2-panel__title">{title}</span>
         {onToggle && (
@@ -543,7 +547,7 @@ function parseGradient(val: string): { stops: GradientStop[]; angle: number } | 
   // 2. Extract stops
   // Standard format: linear-gradient(135deg, #color offset%, #color offset%, ...)
   const stopsPart = val.substring(val.indexOf(',') + 1, val.lastIndexOf(')')).trim()
-  
+
   // This regex matches colors (hex or rgba) followed by an optional percentage offset
   const stopRegex = /(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))\s*([\d.]+)?%/g
   const stops: GradientStop[] = []
@@ -1359,9 +1363,9 @@ type KNSelectProps = {
 function KNSelect({ value, onChange, children, style, className, disabled }: KNSelectProps) {
   return (
     <div className={`kn2-select-wrap ${className || ''} ${disabled ? 'kn2-select-wrap--disabled' : ''}`} style={style}>
-      <select 
-        value={value} 
-        onChange={(e) => onChange(e.target.value)} 
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         className="kn2-select-mac kn2-select-native"
       >
@@ -1386,10 +1390,12 @@ export function SidebarRight() {
     slides,
     currentSlideId,
     activeBlockId,
+    activeActionId,
     selectedBlockIds,
     editingTextBlockId,
     activeInspector,
     setActiveInspector,
+    setActiveActionId,
     applySlideLayout,
     updateSlide,
     updateBlock,
@@ -1431,7 +1437,6 @@ export function SidebarRight() {
 
   const [formatTab, setFormatTab] = useState<FormatTab>('text')
   const [animationTab, setAnimationTab] = useState<AnimationPhase>('buildIn')
-  const [activeActionId, setActiveActionId] = useState<string | null>(null)
   const [isBuildOrderOpen, setBuildOrderOpen] = useState(false)
   const [previewLoopKey, setPreviewLoopKey] = useState<string | null>(null)
   const [textInspector, setTextInspector] = useState<TextInspectorState>({
@@ -1443,38 +1448,41 @@ export function SidebarRight() {
   const [tableInspector, setTableInspector] = useState<TableSelectionInfo | null>(null)
 
   const activeAnimations = activeBlock ? getBlockAnimations(activeBlock) : null
-  
   const isActionTab = animationTab === 'action'
   const actionList = activeAnimations?.action ?? []
-  const selectedAction = isActionTab ? (actionList.find(a => a.id === activeActionId) || actionList[0] || null) : null
-  
-  const activeAnimation = isActionTab ? selectedAction : (activeAnimations?.[animationTab] ?? null)
+  const selectedAction = isActionTab
+    ? (actionList.find((action) => action.id === activeActionId) || actionList[0] || null)
+    : null
+  const activeAnimation = isActionTab
+    ? selectedAction
+    : animationTab === 'buildOut'
+    ? (activeAnimations?.buildOut ?? null)
+    : (activeAnimations?.buildIn ?? null)
   const activeActionAnim = isActionTab ? selectedAction : null
 
-  const syncAnimationTab = useEffectEvent(() => {
-    if (activeInspector !== 'animate' || !activeBlock || !activeAnimations) return
-
-    // If the currently selected tab has an animation, stay on it.
-    if (animationTab === 'action' ? activeAnimations.action.some(a => a.effect !== 'none') : (activeAnimations[animationTab] as any)?.effect !== 'none') return
-
-    // Otherwise, find the first tab that has an animation and switch to it.
-    const phases: AnimationPhase[] = ['buildIn', 'action', 'buildOut']
-    const firstActive = phases.find((phase) => {
-      if (phase === 'action') return activeAnimations.action.some(a => a.effect !== 'none')
-      const animation = activeAnimations[phase] as any
-      return animation && animation.effect !== 'none'
-    })
-
-    if (firstActive && firstActive !== animationTab) {
-      setAnimationTab(firstActive)
-    }
-  })
-
   useEffect(() => {
-    syncAnimationTab()
-  }, [activeInspector, activeBlock?.id])
+    if (animationTab !== 'action') {
+      if (activeActionId !== null) {
+        setActiveActionId(null)
+      }
+      return
+    }
 
-  const currentPreviewKey = activeBlock ? `${activeBlock.id}:${animationTab}${isActionTab && activeActionId ? `:${activeActionId}` : ''}` : null
+    if (actionList.length === 0) {
+      if (activeActionId !== null) {
+        setActiveActionId(null)
+      }
+      return
+    }
+
+    if (!activeActionId || !actionList.some((action) => action.id === activeActionId)) {
+      setActiveActionId(actionList[0].id)
+    }
+  }, [animationTab, activeBlock?.id, activeActionId, actionList, setActiveActionId])
+
+  const currentPreviewKey = activeBlock
+    ? `${activeBlock.id}:${animationTab}${isActionTab && activeActionId ? `:${activeActionId}` : ''}`
+    : null
   const isPreviewing = currentPreviewKey !== null && previewLoopKey === currentPreviewKey
 
   /* ESC closes build order modal */
@@ -1518,7 +1526,7 @@ export function SidebarRight() {
     const decorationTokens = new Set<string>()
     if (activeEditor.isActive('underline')) decorationTokens.add('underline')
     if (activeEditor.isActive('strike')) decorationTokens.add('line-through')
-    
+
     // In mixed font size states, `attributes.fontSize` is undefined, but we still need the size of the first text node.
     let baseFontSize: number | null = null
     activeEditor.state.doc.nodesBetween(from, to, (node) => {
@@ -1613,8 +1621,13 @@ export function SidebarRight() {
   }, [])
 
   const previewRef = useRef<{ key: string; element: HTMLElement; block: typeof activeBlock } | null>(null)
+  const previewTimeoutRef = useRef<number | null>(null)
 
   const stopPreview = () => {
+    if (previewTimeoutRef.current !== null) {
+      window.clearTimeout(previewTimeoutRef.current)
+      previewTimeoutRef.current = null
+    }
     if (previewRef.current?.block) {
       restoreBlockAfterPreview(previewRef.current.element, previewRef.current.block)
     }
@@ -1640,13 +1653,19 @@ export function SidebarRight() {
     const targetActionId = isActionTab ? (activeActionId ?? actionList[0]?.id) : undefined
     const started = previewBlockPhase(el, activeBlock, animationTab, targetActionId)
     if (!started) return
-    if (animationTab === 'action' && activeActionAnim?.loop && currentPreviewKey) {
+    if (currentPreviewKey) {
       previewRef.current = { key: currentPreviewKey, element: el, block: activeBlock }
       setPreviewLoopKey(currentPreviewKey)
+      if (isActionTab && activeActionAnim?.loop) {
+        return
+      }
+      previewTimeoutRef.current = window.setTimeout(() => {
+        stopPreview()
+      }, ((activeAnimation?.duration ?? 0) + (activeAnimation?.delay ?? 0)) * 1000 + 80)
     }
   }
 
-  const updateAnim = (updates: Partial<{ effect: string; trigger: TriggerType; duration: number; delay: number; order: number; loop: boolean }>) => {
+  const updateAnim = (updates: any) => {
     if (!currentSlide || !activeBlock) return
     stopPreview()
     const targetActionId = isActionTab ? (activeActionId ?? actionList[0]?.id) : undefined
@@ -2587,8 +2606,8 @@ export function SidebarRight() {
                       </KNPanel>
 
                       {/* ── Border ───────────────────────────────────── */}
-                      <KNPanel 
-                        title="描边" 
+                      <KNPanel
+                        title="描边"
                         enabled={activeBlock.appearance.strokeStyle && activeBlock.appearance.strokeStyle !== 'none'}
                         onToggle={(enabled) => updApp({ strokeStyle: enabled ? 'solid' : 'none' })}
                         defaultOpen={activeBlock.appearance.strokeStyle && activeBlock.appearance.strokeStyle !== 'none'}
@@ -2635,8 +2654,8 @@ export function SidebarRight() {
                       </KNPanel>
 
                       {/* ── Shadow ───────────────────────────────────── */}
-                      <KNPanel 
-                        title="阴影" 
+                      <KNPanel
+                        title="阴影"
                         enabled={!!activeBlock.appearance.shadow}
                         onToggle={(enabled) => updApp({ shadow: enabled })}
                         defaultOpen={!!activeBlock.appearance.shadow}
@@ -2987,35 +3006,46 @@ export function SidebarRight() {
                         { value: 'buildOut', label: '退场' },
                       ]}
                       value={animationTab}
-                      onChange={(v) => setAnimationTab(v as AnimationPhase)}
+                      onChange={(v) => {
+                        setAnimationTab(v as AnimationPhase)
+                        if (v === 'action' && !activeActionId && actionList.length > 0) {
+                          setActiveActionId(actionList[0].id)
+                        }
+                      }}
                     />
                   </div>
 
                   {isActionTab && (
                     <div style={{ padding: '0 12px', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: actionList.length > 0 ? 12 : 0 }}>
-                      {actionList.map((a, i) => {
-                        const isActive = activeActionId === a.id || (!activeActionId && i === 0 && selectedAction?.id === a.id)
+                      {actionList.map((action, index) => {
+                        const isActive = activeActionId === action.id || (!activeActionId && index === 0 && selectedAction?.id === action.id)
                         return (
                           <div
-                            key={a.id}
+                            key={action.id}
                             style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              padding: '6px 8px', borderRadius: 6, cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '6px 8px',
+                              borderRadius: 6,
+                              cursor: 'pointer',
                               background: isActive ? 'var(--kn2-active-bg, rgba(0, 122, 255, 0.1))' : 'var(--kn2-bg-secondary)',
                               border: `1px solid ${isActive ? 'var(--kn2-active-border, #007aff)' : 'transparent'}`,
                             }}
-                            onClick={() => setActiveActionId(a.id)}
+                            onClick={() => setActiveActionId(action.id)}
                           >
                             <span style={{ fontSize: 13, color: 'var(--kn2-text-primary)' }}>
-                              动作 {i + 1}: {getEffectLabel('action', a.effect)}
+                              动作 {index + 1}: {getEffectLabel('action', action.effect)}
                             </span>
                             <button
                               className="kn2-icon-btn"
                               style={{ padding: 4 }}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                removeBlockAction(currentSlide.id, activeBlock.id, a.id)
-                                if (activeActionId === a.id) setActiveActionId(null)
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                removeBlockAction(currentSlide.id, activeBlock.id, action.id)
+                                if (activeActionId === action.id) {
+                                  setActiveActionId(null)
+                                }
                               }}
                             >
                               <Trash2 size={13} />
@@ -3023,12 +3053,17 @@ export function SidebarRight() {
                           </div>
                         )
                       })}
+
                       <button
-                        className={actionList.length === 0 ? "kn2-primary-btn" : "kn2-secondary-btn"}
+                        className={actionList.length === 0 ? 'kn2-primary-btn' : 'kn2-secondary-btn'}
                         style={{ width: '100%', justifyContent: 'center' }}
                         onClick={() => {
                           const newId = Math.random().toString(36).substring(2, 11)
-                          addBlockAction(currentSlide.id, activeBlock.id, { ...DEFAULT_ACTION, id: newId, effect: getDefaultEffect('action') } as any)
+                          addBlockAction(currentSlide.id, activeBlock.id, {
+                            ...DEFAULT_ACTION,
+                            id: newId,
+                            effect: getDefaultEffect('action'),
+                          } as any)
                           setActiveActionId(newId)
                         }}
                       >
@@ -3040,7 +3075,7 @@ export function SidebarRight() {
                   {!activeAnimation || activeAnimation.effect === 'none' ? (
                     <div className="kn2-anim-empty">
                       <p>{ANIMATION_PHASE_OPTIONS.find((p) => p.id === animationTab)?.emptyLabel}</p>
-                      {!isActionTab && (
+                      {isActionTab ? null : (
                         <button
                           className="kn2-primary-btn"
                           onClick={() => updateAnim({ effect: getDefaultEffect(animationTab) })}
@@ -3051,7 +3086,7 @@ export function SidebarRight() {
                     </div>
                   ) : (
                     <div className="kn2-anim-panel" style={{ padding: '0 12px 16px' }}>
-                      <KNPanel title={isActionTab ? `设置 (动作 ${actionList.findIndex(a => 'id' in a && 'id' in activeAnimation && a.id === activeAnimation.id) + 1})` : "动画设置"} defaultOpen={true}>
+                      <KNPanel title={isActionTab ? `动画设置（动作 ${actionList.findIndex((action) => action.id === activeActionAnim?.id) + 1}）` : '动画设置'} defaultOpen={true}>
                         <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                           {/* Effect + preview */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -3061,9 +3096,22 @@ export function SidebarRight() {
                                 value={activeAnimation.effect}
                                 onChange={(e) => updateAnim({ effect: e.target.value })}
                               >
-                                {getEffectOptions(animationTab).map((o) => (
-                                  <option key={o.id} value={o.id}>{o.label}</option>
-                                ))}
+                                {animationTab === 'action' ? (
+                                  <>
+                                    <option value="none">无效果</option>
+                                    {ACTION_OPTION_GROUPS.map((group) => (
+                                      <optgroup key={group.id} label={group.label}>
+                                        {group.options.map((option) => (
+                                          <option key={option.id} value={option.id}>{option.label}</option>
+                                        ))}
+                                      </optgroup>
+                                    ))}
+                                  </>
+                                ) : (
+                                  getEffectOptions(animationTab).map((option) => (
+                                    <option key={option.id} value={option.id}>{option.label}</option>
+                                  ))
+                                )}
                               </select>
                               <ChevronDown className="kn2-select-chevron" />
                             </div>
@@ -3093,7 +3141,6 @@ export function SidebarRight() {
                             </div>
                           </div>
 
-                          {/* Loop (action only) */}
                           {isActionTab && (
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                               <span style={{ fontSize: 13, color: '#555' }}>循环</span>
@@ -3119,6 +3166,166 @@ export function SidebarRight() {
                             min={0} max={1.5} step={0.1} unit="秒"
                             onChange={(v) => updateAnim({ delay: v })}
                           />
+
+                          {/* Dynamic Config */}
+                          {(() => {
+                            const config = activeAnimation.config || {}
+                            const updateConfig = (patch: any) => updateAnim({ config: { ...config, ...patch } })
+                            const fields = getEffectConfigFields(animationTab, activeAnimation.effect)
+
+                            return (
+                              <>
+                                {fields.map((field) => {
+                                  if (field === 'direction') {
+                                    if (config.toX !== undefined || config.toY !== undefined) return null
+                                    return (
+                                      <div key={field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <span style={{ fontSize: 13, color: '#555' }}>方向</span>
+                                        <div className="kn2-select-wrap" style={{ width: 130 }}>
+                                          <select
+                                            className="kn2-select-mac kn2-select-native"
+                                            value={config.direction || ''}
+                                            onChange={(e) => updateConfig({ direction: e.target.value })}
+                                          >
+                                            <option value="">默认</option>
+                                            {DIRECTION_OPTIONS.map((o) => (
+                                              <option key={o.id} value={o.id}>{o.label}</option>
+                                            ))}
+                                          </select>
+                                          <ChevronDown className="kn2-select-chevron" />
+                                        </div>
+                                      </div>
+                                    )
+                                  }
+
+                                  if (field === 'ease') {
+                                    return (
+                                      <div key={field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <span style={{ fontSize: 13, color: '#555' }}>加速</span>
+                                        <div className="kn2-select-wrap" style={{ width: 130 }}>
+                                          <select
+                                            className="kn2-select-mac kn2-select-native"
+                                            value={config.ease || ''}
+                                            onChange={(e) => updateConfig({ ease: e.target.value })}
+                                          >
+                                            <option value="">默认</option>
+                                            {EASE_OPTIONS.map((o) => (
+                                              <option key={o.id} value={o.id}>{o.label}</option>
+                                            ))}
+                                          </select>
+                                          <ChevronDown className="kn2-select-chevron" />
+                                        </div>
+                                      </div>
+                                    )
+                                  }
+
+                                  if (field === 'distance') {
+                                    if (config.toX !== undefined || config.toY !== undefined) return null
+                                    return (
+                                      <KNSliderRow
+                                        key={field}
+                                        label="距离"
+                                        value={config.distance || (activeAnimation.effect === 'fly-in' ? 300 : 50)}
+                                        min={0} max={600} step={10} unit="px"
+                                        onChange={(v) => updateConfig({ distance: v })}
+                                      />
+                                    )
+                                  }
+
+                                  if (field === 'scale') {
+                                    return (
+                                      <KNSliderRow
+                                        key={field}
+                                        label="缩放"
+                                        value={config.scale || 1}
+                                        min={0} max={3} step={0.1}
+                                        onChange={(v) => updateConfig({ scale: v })}
+                                      />
+                                    )
+                                  }
+
+                                  if (field === 'rotate') {
+                                    return (
+                                      <KNSliderRow
+                                        key={field}
+                                        label="旋转"
+                                        value={config.rotate || 0}
+                                        min={-360} max={360} step={5} unit="°"
+                                        onChange={(v) => updateConfig({ rotate: v })}
+                                      />
+                                    )
+                                  }
+
+                                  if (field === 'opacity') {
+                                    return (
+                                      <KNSliderRow
+                                        key={field}
+                                        label="不透明度"
+                                        value={config.opacity !== undefined ? config.opacity : 1}
+                                        min={0} max={1} step={0.05}
+                                        onChange={(v) => updateConfig({ opacity: v })}
+                                      />
+                                    )
+                                  }
+
+                                  if (field === 'blur') {
+                                    return (
+                                      <KNSliderRow
+                                        key={field}
+                                        label="模糊"
+                                        value={config.blur || 0}
+                                        min={0} max={50} step={1} unit="px"
+                                        onChange={(v) => updateConfig({ blur: v })}
+                                      />
+                                    )
+                                  }
+
+                                  if (field === 'bounceStrength') {
+                                    return (
+                                      <KNSliderRow
+                                        key={field}
+                                        label="强度"
+                                        value={config.bounceStrength || 20}
+                                        min={0} max={100} step={1}
+                                        onChange={(v) => updateConfig({ bounceStrength: v })}
+                                      />
+                                    )
+                                  }
+
+                                  if (field === 'shakeStrength') {
+                                    return (
+                                      <KNSliderRow
+                                        key={field}
+                                        label="强度"
+                                        value={config.shakeStrength || 10}
+                                        min={0} max={50} step={1}
+                                        onChange={(v) => updateConfig({ shakeStrength: v })}
+                                      />
+                                    )
+                                  }
+
+                                  return null
+                                })}
+
+                                {activeAnimation.effect === 'move' && (
+                                  <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: 8, border: '1px dashed rgba(59, 130, 246, 0.3)' }}>
+                                    <p style={{ fontSize: 11, color: '#3b82f6', lineHeight: 1.4, margin: 0 }}>
+                                      💡 <b>提示：</b> 您可以直接在画布上拖拽半透明的“终点”镜像来精确定义移动路径。
+                                    </p>
+                                    {(config.toX !== undefined || config.toY !== undefined) && (
+                                      <button
+                                        className="kn2-secondary-btn"
+                                        style={{ width: '100%', marginTop: 8, fontSize: 11, height: 24 }}
+                                        onClick={() => updateConfig({ toX: undefined, toY: undefined })}
+                                      >
+                                        重置为默认路径
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </>
+                            )
+                          })()}
                         </div>
                       </KNPanel>
 
@@ -3130,12 +3337,13 @@ export function SidebarRight() {
                         <button
                           className="kn2-ghost-danger-btn"
                           onClick={() => {
-                            if (isActionTab && (activeAnimation as any).id) {
-                              removeBlockAction(currentSlide.id, activeBlock.id, (activeAnimation as any).id)
+                            if (isActionTab && activeActionAnim?.id) {
+                              removeBlockAction(currentSlide.id, activeBlock.id, activeActionAnim.id)
                               setActiveActionId(null)
-                            } else {
-                              updateAnim({ effect: 'none' })
+                              return
                             }
+
+                            updateAnim({ effect: 'none' })
                           }}
                         >
                           移除效果
@@ -3243,7 +3451,16 @@ export function SidebarRight() {
           buildOrder={buildOrder}
           onClose={() => setBuildOrderOpen(false)}
           onMove={(id, phase, dir, actionId) => moveBlockAnimation(currentSlide.id, id, phase, dir, actionId)}
-          onSelect={(id, phase, actionId) => { setActiveBlock(id); setActiveInspector('animate'); setAnimationTab(phase); if (actionId) setActiveActionId(actionId) }}
+          onSelect={(id, phase, actionId) => {
+            setActiveBlock(id)
+            setActiveInspector('animate')
+            setAnimationTab(phase)
+            if (phase === 'action') {
+              setActiveActionId(actionId ?? null)
+            } else {
+              setActiveActionId(null)
+            }
+          }}
           slideName={currentSlide.name}
         />
       )}

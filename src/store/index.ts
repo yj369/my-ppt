@@ -55,9 +55,10 @@ export type EditorState = {
   currentSlideId: string | null
   activeBlockId: string | null
   selectedBlockIds: string[]
-  editingTextBlockId: string | null,
-  activeEditor: Editor | null,
-  activeInspector: InspectorTab,
+  editingTextBlockId: string | null
+  activeEditor: Editor | null
+  activeInspector: InspectorTab
+  activeActionId: string | null
 
   isPlayMode: boolean
   navigationDirection: -1 | 0 | 1
@@ -104,14 +105,7 @@ export type EditorState = {
     slideId: string,
     blockId: string,
     phase: AnimationPhase,
-    updates: Partial<{
-      effect: string
-      trigger: TriggerType
-      duration: number
-      delay: number
-      order: number
-      loop: boolean
-    }>,
+    updates: any,
     actionId?: string,
   ) => void
   addBlockAction: (slideId: string, blockId: string, action: import('../types/editor').ActionAnimation) => void
@@ -129,9 +123,10 @@ export type EditorState = {
   groupBlocks: (slideId: string, blockIds: string[]) => void
   ungroupBlocks: (slideId: string, blockIds: string[]) => void
   setActiveBlock: (id: string | null) => void
-  setEditingTextBlock: (id: string | null) => void,
-  setActiveEditor: (editor: Editor | null) => void,
-  setPrimarySelectedBlock: (id: string) => void,
+  setActiveActionId: (id: string | null) => void
+  setEditingTextBlock: (id: string | null) => void
+  setActiveEditor: (editor: Editor | null) => void
+  setPrimarySelectedBlock: (id: string) => void
 
   setSelectedBlocks: (ids: string[], activeId?: string | null) => void
   toggleBlockSelection: (id: string) => void
@@ -199,6 +194,7 @@ function buildSelectionState(
   ids: string[],
   activeId?: string | null,
   editingTextBlockId?: string | null,
+  currentInspector?: InspectorTab,
 ) {
   const selectedBlockIds = uniqueIds(ids)
   const nextActiveId = selectedBlockIds.length === 0
@@ -212,7 +208,9 @@ function buildSelectionState(
     activeBlockId: nextActiveId,
     editingTextBlockId:
       editingTextBlockId && selectedBlockIds.includes(editingTextBlockId) ? editingTextBlockId : null,
-    activeInspector: nextActiveId ? ('format' as const) : ('document' as const),
+    activeInspector: nextActiveId
+      ? (currentInspector === 'animate' ? ('animate' as const) : ('format' as const))
+      : ('document' as const),
   }
 }
 
@@ -262,6 +260,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   editingTextBlockId: null,
   activeEditor: null,
   activeInspector: 'format',
+  activeActionId: null,
   isPlayMode: false,
   navigationDirection: 0,
   showGrid: initialSnapshot.showGrid,
@@ -548,6 +547,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }),
   updateBlockAnimation: (slideId, blockId, phase, updates, actionId) =>
     set((state) => ({
+      activeActionId: phase === 'action' && actionId ? actionId : state.activeActionId,
       slides: state.slides.map((slide) =>
         slide.id === slideId
           ? updateSlideBlockAnimation(slide, blockId, phase, updates, actionId)
@@ -605,6 +605,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           duplicatedId ? [duplicatedId] : state.selectedBlockIds,
           duplicatedId ?? state.activeBlockId,
           state.editingTextBlockId,
+          state.activeInspector,
         ),
       }
     }),
@@ -624,6 +625,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           nextSelectedIds,
           state.activeBlockId === blockId ? null : state.activeBlockId,
           state.editingTextBlockId,
+          state.activeInspector,
         ),
       }
     }),
@@ -644,6 +646,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           nextSelectedIds,
           state.activeBlockId && blockIdSet.has(state.activeBlockId) ? null : state.activeBlockId,
           state.editingTextBlockId,
+          state.activeInspector,
         ),
       }
     }),
@@ -799,7 +802,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       }
     }),
   setActiveBlock: (id) =>
-    set((state) => buildSelectionState(id ? [id] : [], id, state.editingTextBlockId)),
+    set((state) => ({
+      ...buildSelectionState(id ? [id] : [], id, state.editingTextBlockId, state.activeInspector),
+      activeActionId: null,
+    })),
+  setActiveActionId: (id) => set({ activeActionId: id }),
   setEditingTextBlock: (id) =>
     set((state) => ({
       editingTextBlockId:
@@ -816,10 +823,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         state.selectedBlockIds.includes(id) ? state.selectedBlockIds : [id],
         id,
         state.editingTextBlockId,
+        state.activeInspector,
       ),
     })),
   setSelectedBlocks: (ids, activeId) =>
-    set((state) => buildSelectionState(ids, activeId, state.editingTextBlockId)),
+    set((state) => buildSelectionState(ids, activeId, state.editingTextBlockId, state.activeInspector)),
   toggleBlockSelection: (id) =>
     set((state) => {
       if (state.selectedBlockIds.includes(id)) {
@@ -828,18 +836,25 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           nextSelectedIds,
           state.activeBlockId === id ? null : state.activeBlockId,
           state.editingTextBlockId,
+          state.activeInspector,
         )
       }
 
-      return buildSelectionState([...state.selectedBlockIds, id], id, state.editingTextBlockId)
+      return buildSelectionState(
+        [...state.selectedBlockIds, id],
+        id,
+        state.editingTextBlockId,
+        state.activeInspector,
+      )
     }),
-  setActiveInspector: (tab) => set(() => ({ activeInspector: tab })),
+  setActiveInspector: (tab) => set(() => ({ activeInspector: tab, activeActionId: null })),
   togglePlayMode: (force) =>
     set((state) => ({
       isPlayMode: typeof force === 'boolean' ? force : !state.isPlayMode,
       activeBlockId: null,
       selectedBlockIds: [],
       editingTextBlockId: null,
+      activeActionId: null,
       navigationDirection: 0,
     })),
   nextSlide: () =>

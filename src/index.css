@@ -1198,11 +1198,17 @@ body.play-mode .editor-block {
 /* For surface blocks: reset the tpl-wrapper's own background to avoid double-layer */
 .tpl-wrapper--bullet, .tpl-wrapper--quote, .tpl-wrapper--stat,
 .tpl-wrapper--image, .tpl-wrapper--video,
-.tpl-wrapper--chart, .tpl-wrapper--timeline, .tpl-wrapper--3d {
+.tpl-wrapper--chart, .tpl-wrapper--timeline, .tpl-wrapper--3d, .tpl-wrapper--tarot {
   background: none !important;
   border: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
+}
+
+.tpl-wrapper--tarot {
+  display: flex;
+  overflow: hidden;
+  isolation: isolate;
 }
 
 .tpl-wrapper--table {
@@ -6521,6 +6527,99 @@ body.play-mode .rotate-link {
   font-size: 13px;
   font-weight: 600;
   color: var(--kn2-ink);
+}
+
+.kn2-tarot-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kn2-tarot-grid,
+.kn2-tarot-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.kn2-tarot-field-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kn2-tarot-card-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--kn2-border-subtle);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.kn2-tarot-card-editor__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kn2-tarot-card-editor__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kn2-tarot-card-editor__title {
+  color: var(--kn2-ink);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.kn2-tarot-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kn2-tarot-field span {
+  color: var(--kn2-ink-2);
+  font-size: 11px;
+  font-weight: 600;
+  padding-left: 2px;
+}
+
+.kn2-tarot-input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--kn2-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--kn2-ink);
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+
+.kn2-tarot-input:focus {
+  outline: none;
+  border-color: var(--kn2-accent);
+  box-shadow: 0 0 0 1px var(--kn2-accent);
+}
+
+.kn2-tarot-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kn2-tarot-upload-note {
+  color: var(--kn2-ink-3);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .kn2-image-note {

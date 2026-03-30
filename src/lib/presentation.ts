@@ -7,6 +7,11 @@ import {
   normalizeSlideAnimations,
 } from './animations'
 import { buildLegacyImageContent, createImageBlockData, getImageBlockData } from './imageBlock'
+import {
+  createDefaultTarotShowcaseContent,
+  parseTarotShowcaseContent,
+  serializeTarotShowcaseContent,
+} from './tarotShowcase'
 import type {
   BlockAppearance,
   EditorBlock,
@@ -81,6 +86,7 @@ export const INSERT_OPTIONS: Array<{ id: ElementType; label: string; category: s
   { id: 'stat', label: '数字卡片', category: '工具' },
   { id: 'timeline', label: '时间轴', category: '布局' },
   { id: '3d', label: '3D组件', category: '媒体' },
+  { id: 'tarot', label: '塔罗牌组件', category: '组件' },
 ]
 
 const baseAppearance = (textColor = '#f7f7fb'): BlockAppearance => ({
@@ -998,6 +1004,36 @@ function getPresetByType(type: ElementType, overrides?: BlockOverrides): EditorB
         duration: 0.7,
         delay: 0,
       }
+    case 'tarot':
+      return {
+        id: uuidv4(),
+        name: '塔罗牌组件',
+        type,
+        x: 120,
+        y: 90,
+        width: 1040,
+        height: 580,
+        zIndex: 17,
+        rotation: 0,
+        opacity: 1,
+        locked: false,
+        hidden: false,
+        content: overrides?.content ?? createDefaultTarotShowcaseContent(),
+        appearance: {
+          ...baseAppearance('#ffffff'),
+          fillType: 'none',
+          fill: 'transparent',
+          stroke: 'transparent',
+          strokeWidth: 0,
+          strokeStyle: 'none',
+          shadow: false,
+          radius: 32,
+        },
+        anim: 'none',
+        trigger: 'onClick',
+        duration: 0.8,
+        delay: 0,
+      }
   }
 }
 
@@ -1213,9 +1249,12 @@ function normalizeBlockAppearance(block: EditorBlock): EditorBlock {
       ...block,
       keepRatio: block.type === 'image' ? (block.keepRatio ?? true) : block.keepRatio,
       image: normalizedImage,
-      content: block.type === 'image' && normalizedImage
-        ? buildLegacyImageContent(normalizedImage.src, normalizedImage.objectFit)
-        : block.content,
+      content:
+        block.type === 'image' && normalizedImage
+          ? buildLegacyImageContent(normalizedImage.src, normalizedImage.objectFit)
+          : block.type === 'tarot'
+          ? serializeTarotShowcaseContent(parseTarotShowcaseContent(block.content))
+          : block.content,
       appearance: {
         ...block.appearance,
         ...boxModel,
@@ -1271,9 +1310,12 @@ function normalizeBlockAppearance(block: EditorBlock): EditorBlock {
     ...block,
     keepRatio: block.type === 'image' ? (block.keepRatio ?? true) : block.keepRatio,
     image: normalizedImage,
-    content: block.type === 'image' && normalizedImage
-      ? buildLegacyImageContent(normalizedImage.src, normalizedImage.objectFit)
-      : block.content,
+    content:
+      block.type === 'image' && normalizedImage
+        ? buildLegacyImageContent(normalizedImage.src, normalizedImage.objectFit)
+        : block.type === 'tarot'
+        ? serializeTarotShowcaseContent(parseTarotShowcaseContent(block.content))
+        : block.content,
     appearance: normalized,
   }
 }

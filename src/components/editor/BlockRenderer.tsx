@@ -1,8 +1,10 @@
 import type { CSSProperties } from 'react'
 import { parseCssColor } from '../../lib/colors'
+import { parseTarotShowcaseContent } from '../../lib/tarotShowcase'
 import type { EditorBlock } from '../../types/editor'
 import { TipTapEditor } from './TipTapEditor'
 import { EditableImage } from './EditableImage'
+import { TarotShowcase } from '../shared/TarotShowcase'
 import * as LucideIcons from 'lucide-react'
 
 type BlockRendererProps = {
@@ -160,10 +162,10 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
         : appearance.verticalAlign === 'bottom'
         ? 'flex-end'
         : 'flex-start',
-    paddingTop: block.type === 'image' ? '0px' : `${paddingTop}px`,
-    paddingRight: block.type === 'image' ? '0px' : `${paddingRight}px`,
-    paddingBottom: block.type === 'image' ? '0px' : `${paddingBottom}px`,
-    paddingLeft: block.type === 'image' ? '0px' : `${paddingLeft}px`,
+    paddingTop: block.type === 'image' || block.type === 'tarot' ? '0px' : `${paddingTop}px`,
+    paddingRight: block.type === 'image' || block.type === 'tarot' ? '0px' : `${paddingRight}px`,
+    paddingBottom: block.type === 'image' || block.type === 'tarot' ? '0px' : `${paddingBottom}px`,
+    paddingLeft: block.type === 'image' || block.type === 'tarot' ? '0px' : `${paddingLeft}px`,
     // Flip
     transform: flipScale || undefined,
     // CSS vars
@@ -245,6 +247,19 @@ export function BlockRenderer({ block, slideId, isEditing }: BlockRendererProps)
 
   if (block.type === 'image') {
     return <EditableImage block={block} slideId={slideId} style={style} />
+  }
+
+  if (block.type === 'tarot') {
+    const tarotConfig = parseTarotShowcaseContent(block.content)
+
+    return (
+      <div
+        className="tpl-wrapper tpl-wrapper--tarot"
+        style={{ ...style, overflow: 'hidden' }}
+      >
+        <TarotShowcase mode="component" config={tarotConfig} />
+      </div>
+    )
   }
 
   return (

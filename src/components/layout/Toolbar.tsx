@@ -5,6 +5,7 @@ import {
   FileImage,
   Play,
   Presentation,
+  Sparkles,
   Shapes,
   Table2,
   Type,
@@ -18,6 +19,7 @@ import {
 import { useEditorStore } from '../../store'
 import { saveLocalImage, getImageDimensions, calculateFitDimensions } from '../../lib/imageStorage'
 import { IconPicker } from './IconPicker'
+import { TarotPresetModal } from './TarotPresetModal'
 
 export function Toolbar() {
   const navigate = useNavigate()
@@ -33,6 +35,7 @@ export function Toolbar() {
 
   const [isIconMenuOpen, setIconMenuOpen] = useState(false)
   const iconMenuRef = useRef<HTMLDivElement>(null)
+  const [isTarotModalOpen, setTarotModalOpen] = useState(false)
 
   const {
     name,
@@ -97,6 +100,11 @@ export function Toolbar() {
   const insertShapePreset = (type: any) => {
     insertBlock(type)
     setShapeMenuOpen(false)
+  }
+
+  const handleInsertTarotShowcase = () => {
+    insertBlock('tarot')
+    setTarotModalOpen(false)
   }
 
   const handleInsertImageUrl = () => {
@@ -197,6 +205,20 @@ export function Toolbar() {
           <Type size={16} />
           <span>文本</span>
         </button>
+
+        <button
+          className={`toolbar-pill ${isTarotModalOpen ? 'toolbar-pill--active' : ''}`}
+          onClick={() => {
+            setShapeMenuOpen(false)
+            setImageMenuOpen(false)
+            setIconMenuOpen(false)
+            setTarotModalOpen(true)
+          }}
+        >
+          <Sparkles size={16} />
+          <span>塔罗牌</span>
+        </button>
+
         <div style={{ position: 'relative' }} ref={shapeMenuRef}>
           <button
             className={`toolbar-pill ${isShapeMenuOpen ? 'toolbar-pill--active' : ''}`}
@@ -459,6 +481,12 @@ export function Toolbar() {
           <span>播放</span>
         </button>
       </div>
+
+      <TarotPresetModal
+        open={isTarotModalOpen}
+        onClose={() => setTarotModalOpen(false)}
+        onInsert={handleInsertTarotShowcase}
+      />
     </header>
   )
 }

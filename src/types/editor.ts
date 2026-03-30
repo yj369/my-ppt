@@ -45,6 +45,7 @@ export type ElementType =
   | 'divider'
   | '3d'
   | 'icon'
+  | 'tarot'
 
 export type AnimationType =
   | 'none'

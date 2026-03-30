@@ -23,6 +23,7 @@ import {
   X,
   Link2,
 } from 'lucide-react'
+import type { ChangeEvent } from 'react'
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { previewBlockPhase, restoreBlockAfterPreview } from '../../lib/animation-runtime'
@@ -47,12 +48,19 @@ import {
   getImageScalePercent,
   isImageUpscaled,
 } from '../../lib/imageBlock'
+import { saveLocalImage } from '../../lib/imageStorage'
 import {
   getTableBlockMetrics,
   getTableSelectionInfo,
   type TableSelectionInfo,
   type TableSelectionKind,
 } from '../../lib/tableBlock'
+import {
+  parseTarotShowcaseContent,
+  serializeTarotShowcaseContent,
+  TAROT_SHOWCASE_EFFECT_OPTIONS,
+  TAROT_SHOWCASE_REVEAL_OPTIONS,
+} from '../../lib/tarotShowcase'
 import {
   BACKGROUND_OPTIONS,
   LAYOUT_OPTIONS,
@@ -1417,6 +1425,7 @@ export function SidebarRight() {
     showGrid,
     showGuides,
     updatePresentation,
+    addToast,
   } = useEditorStore()
 
   const currentSlide = slides.find((s) => s.id === currentSlideId)
@@ -1971,6 +1980,11 @@ export function SidebarRight() {
   const activeImageScaleLabel = activeImageScale === null
     ? '读取中'
     : `${Math.round(activeImageScale)}%`
+  const activeTarotConfig = useMemo(
+    () => (!isGroupSelection && activeBlock?.type === 'tarot' ? parseTarotShowcaseContent(activeBlock.content) : null),
+    [activeBlock?.content, activeBlock?.type, isGroupSelection],
+  )
+  const tarotImageUploadRefs = useRef<Array<HTMLInputElement | null>>([])
   const fillControl = activeBlock ? getFillControlState(activeBlock.appearance) : null
   const isInlineTextEditing = !!(
     activeBlock
@@ -2067,6 +2081,53 @@ export function SidebarRight() {
     }
   }
 
+  const updateTarotConfig = (nextContent: ReturnType<typeof parseTarotShowcaseContent>) => {
+    if (!currentSlide || !activeBlock || activeBlock.type !== 'tarot') return
+    updateBlock(currentSlide.id, activeBlock.id, {
+      content: serializeTarotShowcaseContent(nextContent),
+    })
+  }
+
+  const patchTarotConfig = (updates: Partial<ReturnType<typeof parseTarotShowcaseContent>>) => {
+    if (!activeTarotConfig) return
+    updateTarotConfig({
+      ...activeTarotConfig,
+      ...updates,
+    })
+  }
+
+  const patchTarotCard = (
+    cardIndex: number,
+    updates: Partial<ReturnType<typeof parseTarotShowcaseContent>['cards'][number]>,
+  ) => {
+    if (!activeTarotConfig) return
+    updateTarotConfig({
+      ...activeTarotConfig,
+      cards: activeTarotConfig.cards.map((card, index) => (
+        index === cardIndex ? { ...card, ...updates } : card
+      )),
+    })
+  }
+
+  const handleTarotCardImageUpload = async (
+    cardIndex: number,
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const uri = await saveLocalImage(file)
+      patchTarotCard(cardIndex, { image: uri })
+      addToast('卡片图片已更新', 'success', 2000)
+    } catch (error) {
+      console.error('Tarot card image upload failed:', error)
+      addToast('卡片图片上传失败', 'error', 2400)
+    } finally {
+      event.target.value = ''
+    }
+  }
+
   /* ── render ─────────────────────────────────────────────────────────── */
   return (
     <>
@@ -2103,7 +2164,7 @@ export function SidebarRight() {
                     <KNSegmentControl<FormatTab>
                       options={[
                         { label: '样式', value: 'style' },
-                        { label: '文本', value: 'text' },
+                        { label: activeBlock.type === 'tarot' ? '组件' : '文本', value: 'text' },
                         { label: '排列', value: 'arrange' },
                       ]}
                       value={formatTab}
@@ -2115,12 +2176,21 @@ export function SidebarRight() {
                   <div className="kn2-ctx">
                     <span className="kn2-ctx__name">{activeBlock.name}</span>
                     <span className="kn2-ctx__badge">
-                      {formatTab === 'style' ? '样式' : formatTab === 'text' ? '文本' : '排列'}
+                      {formatTab === 'style' ? '样式' : formatTab === 'text' ? (activeBlock.type === 'tarot' ? '组件' : '文本') : '排列'}
                     </span>
                   </div>
 
                   {/* ── 文本 ──────────────────────────────────────────── */}
                   {formatTab === 'text' && (
+                    activeBlock.type === 'tarot' ? (
+                      <KNPanel title="组件内容" defaultOpen={true}>
+                        <div style={{ padding: '0 4px' }}>
+                          <p className="kn2-hint" style={{ margin: 0 }}>
+                            塔罗牌组件的标题、副标题、图片、翻牌方式和特效，请到“样式”页里的“塔罗牌组件”面板中调整。
+                          </p>
+                        </div>
+                      </KNPanel>
+                    ) : (
                     <>
                       <div className="kn2-section">
                         <p className="kn2-section__title">字体</p>
@@ -2332,6 +2402,7 @@ export function SidebarRight() {
                         </div>
                       </div>
                     </>
+                    )
                   )}
 
                   {/* ── 样式 ──────────────────────────────────────────── */}
@@ -2572,185 +2643,311 @@ export function SidebarRight() {
                         </KNPanel>
                       )}
 
-                      {/* ── Fill ─────────────────────────────────────── */}
-                      <KNPanel title="填充">
-                        <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          <div className="kn2-select-wrap" onMouseDown={preventMouseFocusSteal}>
-                            <select
-                              className="kn2-select-mac kn2-select-native"
-                              value={activeBlock.appearance.fillType ?? 'none'}
-                              onChange={(e) => setFillType(e.target.value as 'none'|'color'|'gradient')}
-                            >
-                              <option value="none">无</option>
-                              <option value="color">颜色填充</option>
-                              <option value="gradient">渐变填充</option>
-                            </select>
-                            <ChevronDown className="kn2-select-chevron" />
-                          </div>
-                          {activeBlock.appearance.fillType !== 'none' && fillControl && (
-                            <>
-                              <ColorSwatch
-                                value={fillControl.value}
-                                onChange={updateFillColorValue}
-                                label="fill-color"
-                                triggerVariant="field"
-                                triggerLabel={activeBlock.appearance.fillType === 'gradient' ? '渐变填充' : '颜色填充'}
-                                triggerDetail={fillControl.detail}
-                              />
-                              {activeBlock.appearance.fillType === 'gradient' && (
-                                <p className="kn2-hint">点击上方填充卡片，直接编辑色标、透明度和角度。</p>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </KNPanel>
+                      {!isGroupSelection && activeBlock.type === 'tarot' && activeTarotConfig && (
+                        <KNPanel title="塔罗牌组件">
+                          <div className="kn2-tarot-stack">
+                            <div className="kn2-tarot-grid">
+                              <div className="kn2-tarot-field-stack">
+                                <span className="kn2-section__title">翻牌特效</span>
+                                <KNSelect
+                                  value={activeTarotConfig.effect}
+                                  onChange={(value) => patchTarotConfig({ effect: value as typeof activeTarotConfig.effect })}
+                                >
+                                  {TAROT_SHOWCASE_EFFECT_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                  ))}
+                                </KNSelect>
+                              </div>
 
-                      {/* ── Border ───────────────────────────────────── */}
-                      <KNPanel
-                        title="描边"
-                        enabled={activeBlock.appearance.strokeStyle && activeBlock.appearance.strokeStyle !== 'none'}
-                        onToggle={(enabled) => updApp({ strokeStyle: enabled ? 'solid' : 'none' })}
-                        defaultOpen={activeBlock.appearance.strokeStyle && activeBlock.appearance.strokeStyle !== 'none'}
-                      >
-                        <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          <div className="kn2-select-wrap" onMouseDown={preventMouseFocusSteal}>
-                            <select
-                              className="kn2-select-mac kn2-select-native"
-                              value={activeBlock.appearance.strokeStyle ?? 'none'}
-                              onChange={(e) => updApp({ strokeStyle: e.target.value as 'none'|'solid'|'dashed'|'dotted' })}
-                            >
-                              <option value="none">无</option>
-                              <option value="solid">实线</option>
-                              <option value="dashed">虚线</option>
-                              <option value="dotted">点线</option>
-                            </select>
-                            <ChevronDown className="kn2-select-chevron" />
+                              <div className="kn2-tarot-field-stack">
+                                <span className="kn2-section__title">初始状态</span>
+                                <KNSelect
+                                  value={activeTarotConfig.revealMode}
+                                  onChange={(value) => patchTarotConfig({ revealMode: value as typeof activeTarotConfig.revealMode })}
+                                >
+                                  {TAROT_SHOWCASE_REVEAL_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                  ))}
+                                </KNSelect>
+                              </div>
+                            </div>
+
+                            <p className="kn2-hint">
+                              这个组件现在会保留点击翻牌交互；播放时，点击卡片本身不会直接触发下一步切页。
+                            </p>
+
+                            <KNSliderRow
+                              label="不透明度"
+                              value={Math.round(activeBlock.opacity * 100)}
+                              min={0}
+                              max={100}
+                              step={5}
+                              unit="%"
+                              onChange={(value) => upd({ opacity: value / 100 })}
+                            />
+
+                            {activeTarotConfig.cards.map((card, index) => (
+                              <div key={card.id} className="kn2-tarot-card-editor">
+                                <div className="kn2-tarot-card-editor__head">
+                                  <div className="kn2-tarot-card-editor__copy">
+                                    <span className="kn2-section__title">卡片 {index + 1}</span>
+                                    <strong className="kn2-tarot-card-editor__title">
+                                      {card.title || `未命名卡片 ${index + 1}`}
+                                    </strong>
+                                  </div>
+
+                                  <ColorSwatch
+                                    value={card.accent}
+                                    onChange={(value) => patchTarotCard(index, { accent: value })}
+                                    label={`tarot-accent-${card.id}`}
+                                    allowGradient={false}
+                                    triggerVariant="field"
+                                    triggerLabel="强调色"
+                                    triggerDetail={formatColorControlDetail(card.accent)}
+                                  />
+                                </div>
+
+                                <div className="kn2-tarot-field-grid">
+                                  <label className="kn2-tarot-field">
+                                    <span>标题</span>
+                                    <input
+                                      className="kn2-tarot-input"
+                                      value={card.title}
+                                      onChange={(event) => patchTarotCard(index, { title: event.target.value })}
+                                      placeholder="输入卡片标题"
+                                    />
+                                  </label>
+
+                                  <label className="kn2-tarot-field">
+                                    <span>副标题</span>
+                                    <input
+                                      className="kn2-tarot-input"
+                                      value={card.subtitle}
+                                      onChange={(event) => patchTarotCard(index, { subtitle: event.target.value })}
+                                      placeholder="输入卡片副标题"
+                                    />
+                                  </label>
+                                </div>
+
+                                <div className="kn2-tarot-field-stack">
+                                  <label className="kn2-tarot-field">
+                                    <span>图片地址</span>
+                                    <input
+                                      className="kn2-tarot-input"
+                                      value={card.image}
+                                      onChange={(event) => patchTarotCard(index, { image: event.target.value })}
+                                      placeholder="粘贴图片 URL 或上传本地图片"
+                                    />
+                                  </label>
+
+                                  <div className="kn2-tarot-upload-row">
+                                    <button
+                                      type="button"
+                                      className="kn2-secondary-btn"
+                                      style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                                      onClick={() => tarotImageUploadRefs.current[index]?.click()}
+                                    >
+                                      上传本地图片
+                                    </button>
+                                    <span className="kn2-tarot-upload-note">支持替换成你自己的卡面素材</span>
+                                    <input
+                                      ref={(node) => { tarotImageUploadRefs.current[index] = node }}
+                                      type="file"
+                                      accept="image/*"
+                                      style={{ display: 'none' }}
+                                      onChange={(event) => { void handleTarotCardImageUpload(index, event) }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                          {(activeBlock.appearance.strokeStyle && activeBlock.appearance.strokeStyle !== 'none') && (
-                            <>
+                        </KNPanel>
+                      )}
+
+                      {activeBlock.type !== 'tarot' && (
+                        <>
+                          {/* ── Fill ─────────────────────────────────────── */}
+                          <KNPanel title="填充">
+                            <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                              <div className="kn2-select-wrap" onMouseDown={preventMouseFocusSteal}>
+                                <select
+                                  className="kn2-select-mac kn2-select-native"
+                                  value={activeBlock.appearance.fillType ?? 'none'}
+                                  onChange={(e) => setFillType(e.target.value as 'none'|'color'|'gradient')}
+                                >
+                                  <option value="none">无</option>
+                                  <option value="color">颜色填充</option>
+                                  <option value="gradient">渐变填充</option>
+                                </select>
+                                <ChevronDown className="kn2-select-chevron" />
+                              </div>
+                              {activeBlock.appearance.fillType !== 'none' && fillControl && (
+                                <>
+                                  <ColorSwatch
+                                    value={fillControl.value}
+                                    onChange={updateFillColorValue}
+                                    label="fill-color"
+                                    triggerVariant="field"
+                                    triggerLabel={activeBlock.appearance.fillType === 'gradient' ? '渐变填充' : '颜色填充'}
+                                    triggerDetail={fillControl.detail}
+                                  />
+                                  {activeBlock.appearance.fillType === 'gradient' && (
+                                    <p className="kn2-hint">点击上方填充卡片，直接编辑色标、透明度和角度。</p>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </KNPanel>
+
+                          {/* ── Border ───────────────────────────────────── */}
+                          <KNPanel
+                            title="描边"
+                            enabled={activeBlock.appearance.strokeStyle && activeBlock.appearance.strokeStyle !== 'none'}
+                            onToggle={(enabled) => updApp({ strokeStyle: enabled ? 'solid' : 'none' })}
+                            defaultOpen={activeBlock.appearance.strokeStyle && activeBlock.appearance.strokeStyle !== 'none'}
+                          >
+                            <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                              <div className="kn2-select-wrap" onMouseDown={preventMouseFocusSteal}>
+                                <select
+                                  className="kn2-select-mac kn2-select-native"
+                                  value={activeBlock.appearance.strokeStyle ?? 'none'}
+                                  onChange={(e) => updApp({ strokeStyle: e.target.value as 'none'|'solid'|'dashed'|'dotted' })}
+                                >
+                                  <option value="none">无</option>
+                                  <option value="solid">实线</option>
+                                  <option value="dashed">虚线</option>
+                                  <option value="dotted">点线</option>
+                                </select>
+                                <ChevronDown className="kn2-select-chevron" />
+                              </div>
+                              {(activeBlock.appearance.strokeStyle && activeBlock.appearance.strokeStyle !== 'none') && (
+                                <>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: 13, color: '#555' }}>颜色</span>
+                                    <ColorSwatch
+                                      value={normalizeColor(activeBlock.appearance.stroke)}
+                                      onChange={(v) => updApp({ stroke: v })}
+                                      label="stroke-color"
+                                      allowGradient={false}
+                                    />
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: 13, color: '#555' }}>粗细</span>
+                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                      <StepperInput
+                                        value={activeBlock.appearance.strokeWidth ?? 1}
+                                        onChange={(v) => updApp({ strokeWidth: Math.max(1, v) })}
+                                        min={1}
+                                      />
+                                      <span style={{ fontSize: 11, color: 'var(--kn2-ink-3)', marginLeft: 4 }}>pt</span>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </KNPanel>
+
+                          {/* ── Shadow ───────────────────────────────────── */}
+                          <KNPanel
+                            title="阴影"
+                            enabled={!!activeBlock.appearance.shadow}
+                            onToggle={(enabled) => updApp({ shadow: enabled })}
+                            defaultOpen={!!activeBlock.appearance.shadow}
+                          >
+                            <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                              <div className="kn2-select-wrap" onMouseDown={preventMouseFocusSteal}>
+                                <select className="kn2-select-mac kn2-select-native" defaultValue="drop">
+                                  <option value="drop">投影</option>
+                                  <option value="contact">接触阴影</option>
+                                </select>
+                                <ChevronDown className="kn2-select-chevron" />
+                              </div>
+                              <KNSliderRow
+                                label="模糊"
+                                value={activeBlock.appearance.shadowBlur ?? 8}
+                                min={0} max={50} step={1} unit="pt"
+                                onChange={(v) => updApp({ shadowBlur: v })}
+                              />
+                              <KNSliderRow
+                                label="偏移"
+                                value={activeBlock.appearance.shadowOffset ?? 2}
+                                min={0} max={30} step={1} unit="pt"
+                                onChange={(v) => updApp({ shadowOffset: v })}
+                              />
+                              <KNSliderRow
+                                label="不透明"
+                                value={Math.round((activeBlock.appearance.shadowOpacity ?? 0.5) * 100)}
+                                min={0} max={100} step={1} unit="%"
+                                onChange={(v) => updApp({ shadowOpacity: v / 100 })}
+                              />
+                              <KNAngleRow
+                                label="角度"
+                                value={activeBlock.appearance.shadowAngle ?? 270}
+                                onChange={(v) => updApp({ shadowAngle: v })}
+                              />
+
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <span style={{ fontSize: 13, color: '#555' }}>颜色</span>
                                 <ColorSwatch
-                                  value={normalizeColor(activeBlock.appearance.stroke)}
-                                  onChange={(v) => updApp({ stroke: v })}
-                                  label="stroke-color"
+                                  value={activeBlock.appearance.shadowColor ?? '#000000'}
+                                  onChange={(v) => updApp({ shadowColor: v })}
+                                  label="shadow-color"
                                   allowGradient={false}
                                 />
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <span style={{ fontSize: 13, color: '#555' }}>粗细</span>
-                                <div style={{ display: 'flex', alignItems: 'center' }}>
-                                  <StepperInput
-                                    value={activeBlock.appearance.strokeWidth ?? 1}
-                                    onChange={(v) => updApp({ strokeWidth: Math.max(1, v) })}
-                                    min={1}
-                                  />
-                                  <span style={{ fontSize: 11, color: 'var(--kn2-ink-3)', marginLeft: 4 }}>pt</span>
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </KNPanel>
-
-                      {/* ── Shadow ───────────────────────────────────── */}
-                      <KNPanel
-                        title="阴影"
-                        enabled={!!activeBlock.appearance.shadow}
-                        onToggle={(enabled) => updApp({ shadow: enabled })}
-                        defaultOpen={!!activeBlock.appearance.shadow}
-                      >
-                        <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          <div className="kn2-select-wrap" onMouseDown={preventMouseFocusSteal}>
-                            <select className="kn2-select-mac kn2-select-native" defaultValue="drop">
-                              <option value="drop">投影</option>
-                              <option value="contact">接触阴影</option>
-                            </select>
-                            <ChevronDown className="kn2-select-chevron" />
-                          </div>
-                          <KNSliderRow
-                            label="模糊"
-                            value={activeBlock.appearance.shadowBlur ?? 8}
-                            min={0} max={50} step={1} unit="pt"
-                            onChange={(v) => updApp({ shadowBlur: v })}
-                          />
-                          <KNSliderRow
-                            label="偏移"
-                            value={activeBlock.appearance.shadowOffset ?? 2}
-                            min={0} max={30} step={1} unit="pt"
-                            onChange={(v) => updApp({ shadowOffset: v })}
-                          />
-                          <KNSliderRow
-                            label="不透明"
-                            value={Math.round((activeBlock.appearance.shadowOpacity ?? 0.5) * 100)}
-                            min={0} max={100} step={1} unit="%"
-                            onChange={(v) => updApp({ shadowOpacity: v / 100 })}
-                          />
-                          <KNAngleRow
-                            label="角度"
-                            value={activeBlock.appearance.shadowAngle ?? 270}
-                            onChange={(v) => updApp({ shadowAngle: v })}
-                          />
-
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: 13, color: '#555' }}>颜色</span>
-                            <ColorSwatch
-                              value={activeBlock.appearance.shadowColor ?? '#000000'}
-                              onChange={(v) => updApp({ shadowColor: v })}
-                              label="shadow-color"
-                              allowGradient={false}
-                            />
-                          </div>
-                        </div>
-                      </KNPanel>
+                            </div>
+                          </KNPanel>
 
 
-                      {/* ── Opacity & Radius ───────────────────────── */}
-                      <KNPanel title="效果" defaultOpen={true}>
-                        <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          <KNSliderRow
-                            label="不透明"
-                            value={Math.round(activeBlock.opacity * 100)}
-                            min={0} max={100} step={5} unit="%"
-                            onChange={(v) => upd({ opacity: v / 100 })}
-                          />
-                          <KNSliderRow
-                            label="圆角"
-                            value={activeBlock.appearance.radius}
-                            min={0} max={80} step={1} unit="pt"
-                            onChange={(v) => updApp({ radius: v })}
-                          />
-                        </div>
-                      </KNPanel>
+                          {/* ── Opacity & Radius ───────────────────────── */}
+                          <KNPanel title="效果" defaultOpen={true}>
+                            <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                              <KNSliderRow
+                                label="不透明"
+                                value={Math.round(activeBlock.opacity * 100)}
+                                min={0} max={100} step={5} unit="%"
+                                onChange={(v) => upd({ opacity: v / 100 })}
+                              />
+                              <KNSliderRow
+                                label="圆角"
+                                value={activeBlock.appearance.radius}
+                                min={0} max={80} step={1} unit="pt"
+                                onChange={(v) => updApp({ radius: v })}
+                              />
+                            </div>
+                          </KNPanel>
 
-                      <KNPanel title="盒模型">
-                        <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                          <BoxModelControl
-                            title="外边距"
-                            values={displayedMargin}
-                            onChange={(updates) => {
-                              const patch: Partial<EditorBlock['appearance']> = {}
-                              if (updates.top !== undefined) patch.marginTop = updates.top
-                              if (updates.right !== undefined) patch.marginRight = updates.right
-                              if (updates.bottom !== undefined) patch.marginBottom = updates.bottom
-                              if (updates.left !== undefined) patch.marginLeft = updates.left
-                              updApp(patch)
-                            }}
-                          />
-                          <BoxModelControl
-                            title="内边距"
-                            values={displayedPadding}
-                            onChange={(updates) => {
-                              const patch: Partial<EditorBlock['appearance']> = {}
-                              if (updates.top !== undefined) patch.paddingTop = updates.top
-                              if (updates.right !== undefined) patch.paddingRight = updates.right
-                              if (updates.bottom !== undefined) patch.paddingBottom = updates.bottom
-                              if (updates.left !== undefined) patch.paddingLeft = updates.left
-                              updApp(patch)
-                            }}
-                          />
-                        </div>
-                      </KNPanel>
+                          <KNPanel title="盒模型">
+                            <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                              <BoxModelControl
+                                title="外边距"
+                                values={displayedMargin}
+                                onChange={(updates) => {
+                                  const patch: Partial<EditorBlock['appearance']> = {}
+                                  if (updates.top !== undefined) patch.marginTop = updates.top
+                                  if (updates.right !== undefined) patch.marginRight = updates.right
+                                  if (updates.bottom !== undefined) patch.marginBottom = updates.bottom
+                                  if (updates.left !== undefined) patch.marginLeft = updates.left
+                                  updApp(patch)
+                                }}
+                              />
+                              <BoxModelControl
+                                title="内边距"
+                                values={displayedPadding}
+                                onChange={(updates) => {
+                                  const patch: Partial<EditorBlock['appearance']> = {}
+                                  if (updates.top !== undefined) patch.paddingTop = updates.top
+                                  if (updates.right !== undefined) patch.paddingRight = updates.right
+                                  if (updates.bottom !== undefined) patch.paddingBottom = updates.bottom
+                                  if (updates.left !== undefined) patch.paddingLeft = updates.left
+                                  updApp(patch)
+                                }}
+                              />
+                            </div>
+                          </KNPanel>
+                        </>
+                      )}
                     </>
                   )}
 

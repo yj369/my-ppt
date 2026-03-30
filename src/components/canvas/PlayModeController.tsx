@@ -100,6 +100,13 @@ export function PlayModeController() {
         return
       }
 
+      if (event instanceof MouseEvent) {
+        const target = event.target as HTMLElement | null
+        if (target?.closest('[data-play-interactive="true"]')) {
+          return
+        }
+      }
+
       clearAutoAdvance(autoAdvanceRef)
       advanceSequence(sequenceRef.current, stepIndexRef, nextSlide, autoAdvanceRef)
     }
